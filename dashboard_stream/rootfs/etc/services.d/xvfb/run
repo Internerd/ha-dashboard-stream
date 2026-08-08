@@ -1,0 +1,9 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+set -e
+# shellcheck disable=SC1091
+. /data/dashboard-stream.env
+
+rm -f "/tmp/.X99-lock"
+bashio::log.info "Starting Xvfb on ${DISPLAY} (${STREAM_WIDTH}x${STREAM_HEIGHT})"
+exec Xvfb "${DISPLAY}" -screen 0 "${STREAM_WIDTH}x${STREAM_HEIGHT}x24" -nolisten tcp -nolisten unix

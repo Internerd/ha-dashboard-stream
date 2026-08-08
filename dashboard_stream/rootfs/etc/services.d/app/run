@@ -1,0 +1,9 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+set -e
+# shellcheck disable=SC1091
+. /data/dashboard-stream.env
+
+bashio::log.info "Starting Dashboard Stream Cam application (ONVIF, snapshot, ingress panel)"
+cd /opt/app
+exec python3 server.py

@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/apps/repository#repository-configuration
+name: Dashboard Stream repository
+url: "https://github.com/internerd/ha-dashboard-stream"
+maintainer: Marcel Hoess <1354121+Internerd@users.noreply.github.com>

@@ -1,0 +1,62 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. For **security
+        vulnerabilities**, please use the private process in
+        [SECURITY.md](https://github.com/internerd/ha-dashboard-stream/blob/main/SECURITY.md)
+        instead of a public issue.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: dashboard_stream version shown in the app's Info tab.
+    validations:
+      required: true
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant / Supervisor / OS version
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - amd64
+        - aarch64
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: From the app's Log tab. Redact tokens/passwords/IP addresses you don't want public.
+      render: shell
+  - type: textarea
+    id: config
+    attributes:
+      label: App configuration
+      description: Your Configuration tab YAML/JSON, with `stream_password` and `ha_long_lived_token` redacted.
+      render: yaml

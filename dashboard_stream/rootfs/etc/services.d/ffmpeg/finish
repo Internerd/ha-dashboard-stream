@@ -1,0 +1,4 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+bashio::log.warning "ffmpeg capture exited (code ${1:-?}), s6 will restart it."
+sleep 1

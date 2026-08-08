@@ -1,0 +1,23 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+set -e
+# shellcheck disable=SC1091
+. /data/dashboard-stream.env
+
+bashio::log.info "Waiting ${RENDER_WAIT}s for the dashboard to render..."
+sleep "${RENDER_WAIT}"
+
+bashio::log.info "Waiting for mediamtx on 127.0.0.1:${RTSP_PORT}..."
+for _ in $(seq 1 30); do
+    nc -z 127.0.0.1 "${RTSP_PORT}" 2>/dev/null && break
+    sleep 1
+done
+
+bashio::log.info "Capturing ${DISPLAY} -> rtsp://127.0.0.1:${RTSP_PORT}/stream (${STREAM_WIDTH}x${STREAM_HEIGHT}@${STREAM_FRAMERATE})"
+exec ffmpeg -hide_banner -loglevel warning -nostdin \
+    -f x11grab -draw_mouse 0 \
+    -video_size "${STREAM_WIDTH}x${STREAM_HEIGHT}" -framerate "${STREAM_FRAMERATE}" -i "${DISPLAY}" \
+    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
+    -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
+    -f rtsp -rtsp_transport tcp \
+    "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/stream"

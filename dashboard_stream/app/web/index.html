@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Stream Cam</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --text: #1c1e21; --muted: #6b7280;
+    --accent: #03a9f4; --border: #e2e4e8; --ok: #2e7d32; --bad: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111318; --card: #1b1e25; --text: #e8eaed; --muted: #9aa0a6; --border: #2a2d35; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  select, button {
+    font: inherit; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text);
+  }
+  select { width: 100%; max-width: 420px; }
+  button {
+    background: var(--accent); color: #fff; border: none; cursor: pointer; font-weight: 600; margin-left: 8px;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .badge.ok { background: rgba(46,125,50,.15); color: var(--ok); }
+  .badge.bad { background: rgba(198,40,40,.15); color: var(--bad); }
+  #msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+  code { background: rgba(127,127,127,.15); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <h1>Dashboard Stream Cam</h1>
+  <p class="lead">Pick which Home Assistant dashboard is rendered into the camera stream.</p>
+
+  <div class="card">
+    <h2>Dashboard</h2>
+    <label for="dashboard-select">Rendered dashboard</label>
+    <div class="row">
+      <select id="dashboard-select"></select>
+      <button id="apply-btn">Apply</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Status</h2>
+    <dl id="status-list">
+      <dt>Browser</dt><dd id="s-browser">-</dd>
+      <dt>ONVIF</dt><dd id="s-onvif">-</dd>
+      <dt>RTSP URL</dt><dd id="s-rtsp">-</dd>
+      <dt>ONVIF device service</dt><dd id="s-device">-</dd>
+      <dt>Snapshot URL</dt><dd id="s-snapshot">-</dd>
+      <dt>Username</dt><dd id="s-user">-</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Add to UniFi Protect</h2>
+    <p>Protect &rarr; Devices &rarr; Add device &rarr; Third-party camera, then enter the RTSP URL above (or let it
+      auto-discover via ONVIF) with the username/password configured for this app. Full steps are in the
+      <strong>Documentation</strong> tab of this app.</p>
+  </div>
+
+<script>
+(function () {
+  const sel = document.getElementById('dashboard-select');
+  const btn = document.getElementById('apply-btn');
+  const msg = document.getElementById('msg');
+
+  function setMsg(text, isError) {
+    msg.textContent = text || '';
+    msg.style.color = isError ? 'var(--bad)' : 'var(--ok)';
+  }
+
+  async function loadDashboards() {
+    const res = await fetch('api/dashboards');
+    const data = await res.json();
+    sel.innerHTML = '';
+    data.dashboards.forEach(function (d) {
+      const opt = document.createElement('option');
+      opt.value = d.path;
+      opt.textContent = d.title + (d.path ? ' (' + d.path + ')' : ' (root)');
+      if (d.path === data.current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function loadStatus() {
+    const res = await fetch('api/status');
+    const s = await res.json();
+    document.getElementById('s-browser').innerHTML =
+      '<span class="badge ' + (s.browser_ok ? 'ok">rendering' : 'bad">not responding') + '</span> &mdash; ' + s.dashboard_url;
+    document.getElementById('s-onvif').innerHTML = s.onvif_enabled
+      ? '<span class="badge ok">enabled</span> as "' + s.onvif_device_name + '"'
+      : '<span class="badge bad">disabled</span>';
+    document.getElementById('s-rtsp').innerHTML = '<code>' + s.rtsp_url + '</code>';
+    document.getElementById('s-device').innerHTML = '<code>' + s.onvif_device_service + '</code>';
+    document.getElementById('s-snapshot').innerHTML = '<code>' + s.snapshot_url + '</code>';
+    document.getElementById('s-user').textContent = s.stream_username;
+  }
+
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    setMsg('Applying...', false);
+    try {
+      const res = await fetch('api/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: sel.value }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMsg('Applied. The stream now shows: ' + data.url, false);
+        loadStatus();
+      } else {
+        setMsg('Failed: ' + (data.error || 'unknown error'), true);
+      }
+    } catch (e) {
+      setMsg('Request failed: ' + e, true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  loadDashboards().catch(function (e) { setMsg('Could not load dashboards: ' + e, true); });
+  loadStatus().catch(function () {});
+  setInterval(loadStatus, 10000);
+})();
+</script>
+</body>
+</html>

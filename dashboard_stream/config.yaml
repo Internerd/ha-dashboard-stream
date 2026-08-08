@@ -1,0 +1,72 @@
+# https://developers.home-assistant.io/docs/apps/configuration#app-configuration
+#
+# NOTE: Home Assistant renamed "Add-ons" to "Apps" in Supervisor 2026.07.
+# This manifest uses the current App schema. Supervisor's legacy Add-on
+# store/API still installs it the same way, so this repository works
+# whether your Home Assistant refers to it as an "Add-on" or an "App".
+---
+name: "Dashboard Stream Cam"
+version: "1.0.0"
+slug: "dashboard_stream"
+description: >-
+  Renders a Home Assistant dashboard headlessly and publishes it as an
+  authenticated ONVIF/RTSP network camera, so it can be added to UniFi
+  Protect (or any ONVIF/RTSP client) as a third-party camera.
+url: "https://github.com/internerd/ha-dashboard-stream/tree/main/dashboard_stream"
+# image intentionally omitted: Supervisor builds this app locally from the
+# Dockerfile in this repository using build.yaml, so installation only ever
+# needs this GitHub repository - no external container registry required.
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+boot: auto
+homeassistant_api: true
+hassio_api: false
+host_network: true
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:cctv
+panel_title: Dashboard Stream
+# Points at the public ONVIF-port /health endpoint (0.0.0.0-bound), not the
+# ingress panel: the ingress panel is intentionally loopback-only (see
+# SECURITY.md) and [HOST] is not guaranteed to resolve to something that
+# can reach a loopback-bound port from the Supervisor's side.
+watchdog: "http://[HOST]:[PORT:8080]/health"
+options:
+  ha_url: "http://homeassistant.local:8123"
+  ha_long_lived_token: ""
+  dashboard_path: "lovelace/default_view"
+  dashboard_custom_url: ""
+  resolution: "1920x1080"
+  framerate: 15
+  render_wait: 8
+  reload_interval: 3600
+  rtsp_port: 8554
+  onvif_port: 8080
+  onvif_enabled: true
+  onvif_device_name: "Dashboard Stream Cam"
+  stream_username: "viewer"
+  stream_password: ""
+  watchdog_interval: 15
+  stall_timeout: 45
+  log_level: "info"
+schema:
+  ha_url: "url"
+  ha_long_lived_token: "password?"
+  dashboard_path: "str"
+  dashboard_custom_url: "str?"
+  resolution: "list(1280x720|1366x768|1920x1080|1024x600|800x480)"
+  framerate: "int(1,30)"
+  render_wait: "int(1,60)"
+  reload_interval: "int(0,86400)"
+  rtsp_port: "port"
+  onvif_port: "port"
+  onvif_enabled: "bool"
+  onvif_device_name: "str"
+  stream_username: "str"
+  stream_password: "password"
+  watchdog_interval: "int(5,300)"
+  stall_timeout: "int(10,600)"
+  log_level: "list(debug|info|warning|error)"

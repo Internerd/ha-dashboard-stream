@@ -1,0 +1,48 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+set -e
+# shellcheck disable=SC1091
+. /data/dashboard-stream.env
+
+mkdir -p /data/chromium-profile
+
+bashio::log.info "Waiting for Xvfb..."
+for _ in $(seq 1 30); do
+    [ -S "/tmp/.X11-unix/X99" ] && break
+    sleep 1
+done
+
+bashio::log.info "Waiting for Home Assistant at ${HA_URL} ..."
+for _ in $(seq 1 90); do
+    if curl -sf -o /dev/null --max-time 3 "${HA_URL%/}/manifest.json"; then
+        break
+    fi
+    sleep 2
+done
+
+CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || echo /usr/bin/chromium)"
+bashio::log.info "Starting Chromium kiosk (binary: ${CHROMIUM_BIN}) -> ${DASHBOARD_URL}"
+
+exec "${CHROMIUM_BIN}" \
+    --kiosk \
+    --app="${DASHBOARD_URL}" \
+    --window-position=0,0 \
+    --window-size="${STREAM_WIDTH},${STREAM_HEIGHT}" \
+    --user-data-dir=/data/chromium-profile \
+    --remote-debugging-port=9222 \
+    --remote-debugging-address=127.0.0.1 \
+    --remote-allow-origins=* \
+    --no-sandbox \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-dev-shm-usage \
+    --disable-translate \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-notifications \
+    --disable-features=TranslateUI \
+    --autoplay-policy=no-user-gesture-required \
+    --noerrdialogs \
+    --check-for-update-interval=31536000 \
+    --overscroll-history-navigation=0 \
+    --start-fullscreen

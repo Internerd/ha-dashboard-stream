@@ -1,0 +1,12 @@
+# Editors / OS
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local build/test artifacts
+*.log

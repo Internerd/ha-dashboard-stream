@@ -1,0 +1,77 @@
+---
+configuration:
+  ha_url:
+    name: Home Assistant URL
+    description: >-
+      Full base URL the internal browser uses to reach your Home Assistant
+      frontend, e.g. http://homeassistant.local:8123 or
+      http://192.168.1.10:8123. Must be reachable from this app.
+  ha_long_lived_token:
+    name: Long-Lived Access Token
+    description: >-
+      A Long-Lived Access Token from a Home Assistant user profile
+      (Profile > Security > Long-Lived Access Tokens). Used only locally to
+      auto-sign the headless browser into the dashboard. Leave empty if you
+      already allow the app's network via the Trusted Networks auth
+      provider instead.
+  dashboard_path:
+    name: Dashboard path (fallback)
+    description: >-
+      Relative Lovelace path appended to the Home Assistant URL, e.g.
+      lovelace/default_view or lovelace-kiosk/0. Used only if you have not
+      picked a dashboard from the dropdown on the app's web panel.
+  dashboard_custom_url:
+    name: Custom dashboard URL (advanced)
+    description: >-
+      Optional full URL to render instead of ha_url + dashboard_path, for
+      dashboards hosted outside this Home Assistant instance. Leave empty
+      for normal use.
+  resolution:
+    name: Stream resolution
+    description: Rendered browser viewport and output video resolution.
+  framerate:
+    name: Frame rate
+    description: Output stream frame rate in frames per second.
+  render_wait:
+    name: Render wait (seconds)
+    description: >-
+      Seconds to wait after the dashboard loads before capture starts, so
+      cards, images and animations finish rendering.
+  reload_interval:
+    name: Reload interval (seconds)
+    description: >-
+      Periodically reloads the dashboard page to clear browser memory
+      growth on long-running kiosk sessions. 0 disables periodic reload.
+  rtsp_port:
+    name: RTSP port
+    description: TCP port the RTSP camera stream is published on.
+  onvif_port:
+    name: ONVIF port
+    description: TCP port the ONVIF device/media web service listens on.
+  onvif_enabled:
+    name: Enable ONVIF
+    description: >-
+      Enable the ONVIF device/media service and WS-Discovery responder so
+      NVRs such as UniFi Protect can auto-discover and add this stream.
+  onvif_device_name:
+    name: ONVIF device name
+    description: Friendly name reported to ONVIF/NVR clients such as UniFi Protect.
+  stream_username:
+    name: Stream username
+    description: Username required to view the RTSP stream and ONVIF service.
+  stream_password:
+    name: Stream password
+    description: >-
+      Password required to view the RTSP stream and ONVIF service. Required
+      - the app refuses to start with an empty password.
+  watchdog_interval:
+    name: Watchdog interval (seconds)
+    description: How often the internal watchdog checks the render/stream pipeline.
+  stall_timeout:
+    name: Stall timeout (seconds)
+    description: >-
+      If no new video frame is produced for this many seconds, the watchdog
+      force-restarts the browser/capture pipeline.
+  log_level:
+    name: Log level
+    description: Verbosity of the app's log output.

@@ -1,0 +1,11 @@
+---
+build_from:
+  amd64: ghcr.io/home-assistant/base:3.23
+  aarch64: ghcr.io/home-assistant/base:3.23
+args:
+  MEDIAMTX_VERSION: "v1.20.0"
+labels:
+  org.opencontainers.image.title: "Dashboard Stream Cam"
+  org.opencontainers.image.description: "Home Assistant dashboard rendered as an authenticated ONVIF/RTSP camera stream"
+  org.opencontainers.image.source: "https://github.com/internerd/ha-dashboard-stream"
+  org.opencontainers.image.licenses: "Apache-2.0"

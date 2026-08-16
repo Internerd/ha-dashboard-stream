@@ -182,6 +182,21 @@ Python app (aiohttp, one process):
 - Check the **Log** tab first - shell and Python components both log
   clearly prefixed, timestamped messages there.
 
+## Legal
+
+Before deploying this on a real network, please read:
+
+- [SECURITY.md](https://github.com/internerd/ha-dashboard-stream/blob/main/SECURITY.md) -
+  the security trade-offs this app makes (below).
+- [PRIVACY.md](https://github.com/internerd/ha-dashboard-stream/blob/main/PRIVACY.md) -
+  what data the app touches and who is responsible for it (bilingual EN/DE).
+- [DISCLAIMER.md](https://github.com/internerd/ha-dashboard-stream/blob/main/DISCLAIMER.md) -
+  liability disclaimer, including the legal considerations that apply if
+  your dashboard embeds real camera feeds your NVR then records
+  (bilingual EN/DE).
+- [NOTICE.md](https://github.com/internerd/ha-dashboard-stream/blob/main/NOTICE.md) -
+  third-party software/spec/trademark attribution.
+
 ## Security notes
 
 See [SECURITY.md](https://github.com/internerd/ha-dashboard-stream/blob/main/SECURITY.md)

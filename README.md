@@ -60,6 +60,8 @@ AI_POLICY.md             how AI assistance was used in this repository, and the
 NOTICE.md                third-party software, specs and trademark attributions
 SECURITY.md              supported versions, vulnerability reporting, and the
                           security trade-offs this app makes (read before deploying)
+PRIVACY.md               privacy policy / Datenschutzerklärung (EN + DE)
+DISCLAIMER.md            liability disclaimer / Haftungsausschluss (EN + DE)
 LICENSE                  Apache License 2.0
 ```
 
@@ -71,10 +73,31 @@ LICENSE                  Apache License 2.0
 - This project is **not affiliated with, endorsed by, or sponsored by**
   the Open Home Foundation / Home Assistant, Ubiquiti Inc. (UniFi
   Protect), ONVIF, or Google (Chromium). Product names are used solely to
-  describe compatibility.
+  describe compatibility. See [DISCLAIMER.md](./DISCLAIMER.md) for the
+  full liability disclaimer, including the legal considerations that
+  apply if your dashboard embeds real camera feeds that end up recorded
+  by your NVR software.
+- This is self-hosted software with no telemetry, analytics, or
+  phone-home of any kind - see [PRIVACY.md](./PRIVACY.md) (bilingual
+  EN/DE) for exactly what data the app touches and who is the GDPR/DSGVO
+  data controller for your own instance (you are).
 - See [AI_POLICY.md](./AI_POLICY.md) for how generative AI was used to
   produce this repository's code and documentation, and the policy for
   AI-assisted contributions.
+
+### A note on HACS
+
+This repository is **not**, and cannot be, a [HACS](https://hacs.xyz)
+repository. HACS only distributes `integration`, `plugin` (Lovelace
+frontend), `theme`, `python_script`, `appdaemon` and `template`
+repositories - Supervisor Add-ons/Apps like this one are explicitly a
+different, separate mechanism with their own store, which is exactly
+what `repository.yaml` and `dashboard_stream/config.yaml` in this repo
+implement (see **Installation** above). Adding a `hacs.json` here
+wouldn't do anything - HACS would refuse to index this repository. If a
+future version of this project ships a companion Lovelace card or
+integration, *that* piece could reasonably become HACS-installable, and
+would get its own `hacs.json` at that point.
 
 ## Contributing
 

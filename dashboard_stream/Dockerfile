@@ -11,7 +11,7 @@ ENV \
 
 # ---------------------------------------------------------------------------
 # System packages
-#   chromium/ttf-freefont/mesa-*: headless dashboard rendering
+#   chromium/font-noto*/mesa-*: headless dashboard rendering
 #   xvfb: virtual framebuffer chromium renders into
 #   ffmpeg: X11 capture -> H.264 encode, and periodic JPEG snapshots
 #   python3/py3-pip: the app itself (aiohttp server, ONVIF, WS-Discovery)
@@ -19,10 +19,10 @@ ENV \
 RUN \
     apk add --no-cache \
         chromium \
-        ttf-freefont \
+        font-noto \
         font-noto-emoji \
         mesa-gl \
-        mesa-dri-swrast \
+        mesa-dri-gallium \
         xvfb \
         dbus \
         ffmpeg \

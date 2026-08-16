@@ -4,6 +4,19 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-08-16
+
+### Fixed
+
+- Docker build failed on Home Assistant Supervisor with
+  `ERROR: unable to select packages: mesa-dri-swrast (no such package)`.
+  Current Alpine (as used by `ghcr.io/home-assistant/base:3.23`) merged the
+  software-rasterizer DRI driver into the `mesa-dri-gallium` package;
+  switched to that.
+- Replaced `ttf-freefont` (no longer present in current Alpine aports)
+  with `font-noto`, which also gives broader Unicode/Latin/Cyrillic/Greek
+  glyph coverage for rendered dashboards.
+
 ## [1.0.0] - 2026-08-08
 
 ### Added

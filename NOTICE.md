@@ -61,6 +61,13 @@ from the [Contributor Covenant](https://www.contributor-covenant.org/),
 version 2.1, available under the
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) license.
 
+## Related documents
+
+This file covers third-party attribution. For the privacy policy see
+[PRIVACY.md](./PRIVACY.md), and for the liability disclaimer (including
+trademark disclaimers and the legal considerations around streaming real
+camera footage) see [DISCLAIMER.md](./DISCLAIMER.md).
+
 ## AI-generated content
 
 See [AI_POLICY.md](./AI_POLICY.md) for a disclosure of how generative AI

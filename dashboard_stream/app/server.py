@@ -207,7 +207,7 @@ async def handle_onvif(request: web.Request) -> web.Response:
         return web.Response(status=404, text="ONVIF is disabled in the app configuration.")
     body = await request.read()
     try:
-        xml_response = onvif.handle_soap_request(body, ctx)
+        xml_response = onvif.handle_soap_request(body, ctx, peer=request.remote or "?")
         return web.Response(text=xml_response, content_type="application/soap+xml")
     except onvif.OnvifError as err:
         return web.Response(text=onvif.soap_fault(err), content_type="application/soap+xml", status=err.http_status)

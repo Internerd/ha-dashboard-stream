@@ -28,19 +28,13 @@ for _ in $(seq 1 90); do
     sleep 2
 done
 
-# Chromium log levels: 0=INFO 1=WARNING 2=ERROR 3=FATAL. Anything below FATAL
-# is third-party chatter from subsystems this kiosk does not use, so only
-# surface it when the app itself is set to debug.
-if [ "${LOG_LEVEL}" = "debug" ]; then
-    CHROMIUM_LOG_ARGS=(--enable-logging=stderr --log-level=0)
-else
-    CHROMIUM_LOG_ARGS=(--log-level=3)
-fi
-
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || echo /usr/bin/chromium)"
 bashio::log.info "Starting Chromium kiosk (binary: ${CHROMIUM_BIN}) -> ${DASHBOARD_URL}"
 
-exec "${CHROMIUM_BIN}" \
+# The commas below belong to --window-position/--window-size values, they do
+# not separate array elements.
+# shellcheck disable=SC2054
+CHROMIUM_ARGS=( \
     --kiosk \
     --app="${DASHBOARD_URL}" \
     --window-position=0,0 \
@@ -73,4 +67,22 @@ exec "${CHROMIUM_BIN}" \
     --disable-sync \
     --disable-breakpad \
     --metrics-recording-only \
-    "${CHROMIUM_LOG_ARGS[@]}"
+)
+
+# Chromium log levels: 0=INFO 1=WARNING 2=ERROR 3=FATAL. --log-level is only
+# honoured once logging has been initialised (chrome/common/logging_chrome.cc
+# applies it inside InitChromeLogging), hence the --enable-logging that goes
+# with it. Outside debug, anything below FATAL is chatter from browser
+# subsystems this kiosk does not use.
+#
+# The awk filter is the backstop: Chromium keeps trying to register with
+# Google Cloud Messaging for the page's push subscription and logs
+# DEPRECATED_ENDPOINT each time, and that survives both --log-level and
+# --disable-background-networking. Nothing depends on it here, so drop just
+# those lines; everything else Chromium says still reaches the log.
+if [ "${LOG_LEVEL}" = "debug" ]; then
+    exec "${CHROMIUM_BIN}" "${CHROMIUM_ARGS[@]}" --enable-logging=stderr --log-level=0
+fi
+
+exec "${CHROMIUM_BIN}" "${CHROMIUM_ARGS[@]}" --enable-logging=stderr --log-level=3 \
+    2> >(awk '!/ERROR:(google_apis\/gcm|dbus)\//{ print; fflush() }' >&2)

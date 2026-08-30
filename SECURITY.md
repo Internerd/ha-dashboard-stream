@@ -57,6 +57,11 @@ network isolation. Two things are done to limit the blast radius of this:
 - `stream_username`/`stream_password` gate the RTSP stream, the ONVIF
   SOAP service (via WS-Security UsernameToken, digest or plain) and the
   JPEG snapshot endpoint (via HTTP Basic auth).
+- The RTSP server offers both Basic and Digest authentication. Digest is
+  there because NVRs commonly require it; over plain (unencrypted) RTSP
+  neither method keeps the password confidential from someone who can
+  capture the traffic, so treat the stream credentials as LAN-visible and
+  do not reuse a password you use elsewhere.
 - ffmpeg's local publish leg to the embedded RTSP server uses a separate,
   fixed, non-secret credential restricted (via mediamtx's `ips` allow
   list) to `127.0.0.1` only - so it never carries your real stream

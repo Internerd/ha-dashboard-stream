@@ -48,6 +48,15 @@ configuration:
   onvif_port:
     name: ONVIF port
     description: TCP port the ONVIF device/media web service listens on.
+  onvif_extra_port:
+    name: Additional ONVIF port (advanced)
+    description: >-
+      Serve the ONVIF/snapshot service on a second port as well. 0 disables
+      it. Set it to 80 if your NVR expects to find ONVIF on the standard HTTP
+      port - UniFi Protect's "Advanced Adoption" probes the address you type
+      there rather than a port you choose. The app keeps listening on the
+      regular ONVIF port too, and simply logs a warning if the extra port is
+      already taken on the host.
   onvif_enabled:
     name: Enable ONVIF
     description: >-

@@ -94,6 +94,7 @@ camera.
 | `render_wait` | Seconds to let the page finish rendering before capture starts. |
 | `reload_interval` | Seconds between automatic page reloads (0 disables). Mitigates browser memory growth on long-running kiosks. |
 | `rtsp_port` / `onvif_port` | Fixed TCP ports for the stream and the ONVIF/snapshot service. Leave at the defaults (8554/8080) unless they conflict with something else on your host - the Supervisor-level watchdog is wired to the default ONVIF port. |
+| `onvif_extra_port` | Serve ONVIF/snapshot on a second port as well (0 = off). Set to `80` for NVRs that expect ONVIF on the standard HTTP port, such as UniFi Protect's Advanced Adoption. A port already in use on the host is logged and skipped, never fatal. |
 | `onvif_enabled` | Turns the ONVIF service and WS-Discovery responder on/off. The RTSP stream keeps working either way. |
 | `onvif_device_name` | Friendly name reported to ONVIF/NVR clients. |
 | `advertise_ip` | IP address handed out to ONVIF/RTSP clients (stream URL, ONVIF service addresses, WS-Discovery). Empty = auto-detect from the host's default route. Set it when Home Assistant has several interfaces/VLANs and your NVR is not on the default-route one. It changes only the *advertised* address - every service always listens on all interfaces. |
@@ -122,9 +123,29 @@ credentials, or ONVIF discovery - this app supports both paths:
    IP and ONVIF port (`8080`) manually.
 3. When prompted, enter the same `stream_username` / `stream_password`.
 
+**Protect's "Advanced Adoption" (Labs):**
+This dialog has a single **IP address** field plus username and password.
+It wants exactly that - an IP address, not an RTSP URL - and Protect then
+talks ONVIF to it on the standard HTTP port, not on this app's `8080`. So:
+
+1. Set `onvif_extra_port` to `80` in the app options (leave `onvif_port` at
+   `8080`; the Supervisor watchdog is wired to it). The app then answers
+   ONVIF on both ports. If something else on the Home Assistant host
+   already uses port 80, the app logs a warning and keeps working on 8080 -
+   in that case use the manual RTSP method instead.
+2. Enter the plain IP address of the Home Assistant host - the one the
+   startup log names in its `Listening: …` line - with the
+   `stream_username` / `stream_password`.
+
 If discovery doesn't find the camera (common across VLAN boundaries, or
 with switches that filter multicast), the manual RTSP method above always
 works and is what we'd recommend defaulting to.
+
+Whichever path you use, the app log tells you whether Protect arrived at
+all: an RTSP attempt logs `[RTSP] [conn <address>] opened`, an ONVIF
+request logs the operation and the peer. If a failed adoption leaves no
+trace in the log, Protect never reached this app and the address or the
+route between the two is what needs fixing, not the credentials.
 
 ## How it works
 

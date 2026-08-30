@@ -4,6 +4,22 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-08-30
+
+### Added
+
+- `onvif_extra_port` option: serve the ONVIF/snapshot service on a second
+  port in addition to `onvif_port`. UniFi Protect's "Advanced Adoption"
+  takes an IP address and then speaks ONVIF on the standard HTTP port
+  rather than asking which port to use, so an app answering only on 8080 is
+  never contacted at all - the adoption fails with "invalid credentials"
+  while nothing whatsoever appears in this app's log. Setting the option to
+  `80` makes that flow work. A port already in use on the host is logged as
+  a warning and skipped, never fatal.
+- The startup log now summarises what is listening where and the RTSP URL
+  to hand an NVR, so the address an NVR should be pointed at no longer has
+  to be pieced together.
+
 ## [1.1.2] - 2026-08-30
 
 ### Fixed

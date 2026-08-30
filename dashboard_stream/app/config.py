@@ -36,6 +36,7 @@ class Settings:
     reload_interval: int
     rtsp_port: int
     onvif_port: int
+    onvif_extra_port: int
     onvif_enabled: bool
     onvif_device_name: str
     advertise_ip: str
@@ -68,6 +69,7 @@ def load_settings() -> Settings:
         reload_interval=_int(env.get("RELOAD_INTERVAL"), 3600),
         rtsp_port=_int(env.get("RTSP_PORT"), 8554),
         onvif_port=_int(env.get("ONVIF_PORT"), 8080),
+        onvif_extra_port=_int(env.get("ONVIF_EXTRA_PORT"), 0),
         onvif_enabled=_bool(env.get("ONVIF_ENABLED"), True),
         onvif_device_name=env.get("ONVIF_DEVICE_NAME", "Dashboard Stream Cam"),
         advertise_ip=env.get("ADVERTISE_IP", "").strip(),

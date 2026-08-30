@@ -138,6 +138,10 @@ Home Assistant dashboard (HTTP)
         ├─ RTSP :8554  ───────────────► UniFi Protect / any RTSP client
         └─ (local publish only)
 
+Supporting services:
+   • D-Bus system + session bus (container-local, no host access) - exists
+     only so Chromium's UPower/secret-service/session probes get answered
+
 Python app (aiohttp, one process):
    • ONVIF device/media SOAP service + WS-Discovery  :8080, udp/3702 (LAN)
    • JPEG snapshot endpoint                          :8080 (LAN)
@@ -165,6 +169,10 @@ Python app (aiohttp, one process):
 - All logs (bashio-formatted shell logs and Python `logging` output) go to
   stdout and are visible in the app's **Log** tab, at the level set by
   `log_level`.
+- Chromium's own stderr is quiet by default: it is started with
+  `--log-level=3` (fatal only), because everything below that is chatter
+  from browser subsystems this kiosk does not use. Setting `log_level` to
+  `debug` switches Chromium to full `--log-level=0` logging as well.
 
 ## Troubleshooting
 
@@ -179,6 +187,11 @@ Python app (aiohttp, one process):
 - **High CPU** - lower `resolution`/`framerate`; software-rendering a
   browser is inherently more expensive than a real camera's hardware
   encoder, especially on Raspberry Pi-class hardware.
+- **`dbus`/`gcm` errors in the log** - Chromium probes a system and a
+  session D-Bus and Google's push-messaging endpoint on startup. The
+  container runs its own minimal, container-local D-Bus pair and disables
+  the browser's background networking so these probes stay quiet; if you
+  ever see them again, they are cosmetic and do not affect the stream.
 - Check the **Log** tab first - shell and Python components both log
   clearly prefixed, timestamped messages there.
 

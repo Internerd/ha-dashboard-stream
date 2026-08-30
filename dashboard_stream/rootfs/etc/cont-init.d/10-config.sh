@@ -96,6 +96,8 @@ export WATCHDOG_INTERVAL="${WATCHDOG_INTERVAL}"
 export STALL_TIMEOUT="${STALL_TIMEOUT}"
 export LOG_LEVEL="${LOG_LEVEL}"
 export DISPLAY=":99"
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/dbus/session_bus_socket"
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
 EOF
 chmod 600 "${ENV_FILE}"

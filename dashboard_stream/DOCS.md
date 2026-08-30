@@ -145,8 +145,9 @@ Supporting services:
 Python app (aiohttp, one process):
    • ONVIF device/media SOAP service + WS-Discovery  :8080, udp/3702 (LAN)
    • JPEG snapshot endpoint                          :8080 (LAN)
-   • Ingress dashboard-picker web panel               loopback only, via
-                                                        Home Assistant's
+   • Ingress dashboard-picker web panel               Supervisor peers
+                                                        only, via Home
+                                                        Assistant's
                                                         authenticated proxy
    • Browser supervisor: login bootstrap, periodic reload, hang detection
    • /health endpoint used by the Supervisor watchdog
@@ -223,10 +224,14 @@ in the repository for the full picture, in short:
   LAN, like a real camera). That means its ports bind directly to your
   Home Assistant host's network interfaces, bypassing Supervisor's usual
   per-app Docker network isolation.
-- The dashboard-picker web panel is intentionally bound to loopback only
-  and reachable exclusively through Home Assistant's authenticated
-  ingress proxy - it is **not** exposed on your LAN even though the app
-  uses host networking.
+- The dashboard-picker web panel is reachable exclusively through Home
+  Assistant's authenticated ingress proxy - it is **not** exposed on your
+  LAN even though the app uses host networking. Because host networking
+  means the Supervisor reaches the app through the gateway of its own
+  Docker network (`172.30.32.0/23`) rather than through loopback, the
+  panel listens on all interfaces but refuses every request whose peer is
+  outside that network (and loopback); refused requests are logged with
+  the address they came from.
 - The RTSP/ONVIF/snapshot ports **are** LAN-reachable by design (that's
   the point - they need to work like a normal IP camera), and are gated by
   the username/password you configure. Anyone with those credentials and

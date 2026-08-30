@@ -18,8 +18,11 @@ bashio::log.info "Starting Xvfb on ${DISPLAY} (${STREAM_WIDTH}x${STREAM_HEIGHT})
 # xkeyboard-config data is newer than the keysym table xkbcomp was built
 # with, which produces a wall of harmless "Could not resolve keysym XF86..."
 # warnings. Drop exactly those lines - real X errors still come through.
+# awk, not grep: this image ships BusyBox grep, which has no --line-buffered
+# and block-buffers into a pipe, so a genuine fatal error would sit unseen in
+# the buffer. awk's fflush() writes every kept line straight through.
 exec Xvfb "${DISPLAY}" \
     -screen 0 "${STREAM_WIDTH}x${STREAM_HEIGHT}x24" \
     -nolisten tcp \
     -nolisten local \
-    2> >(grep --line-buffered -vE '^(The XKEYBOARD keymap compiler|> Warning:|Errors from xkbcomp)' >&2)
+    2> >(awk '!/^(The XKEYBOARD keymap compiler|> Warning:|Errors from xkbcomp)/ { print; fflush() }' >&2)

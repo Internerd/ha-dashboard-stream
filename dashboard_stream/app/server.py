@@ -7,11 +7,11 @@ Runs two aiohttp web services in one process:
   liveness endpoint - these are meant to be reached from the LAN (e.g. by
   UniFi Protect) and are gated by the same username/password as the RTSP
   stream;
-- an *ingress* service bound only to 127.0.0.1:<ingress_port>, reachable
-  exclusively through Home Assistant's authenticated Supervisor ingress
-  proxy, serving the dashboard picker panel. It is intentionally not
-  exposed on the LAN even though the app runs with host networking - see
-  SECURITY.md.
+- an *ingress* service on <ingress_port> serving the dashboard picker
+  panel, reachable exclusively through Home Assistant's authenticated
+  Supervisor ingress proxy: every request from outside the Supervisor's
+  own Docker network is refused, so the panel stays off the LAN even
+  though the app runs with host networking - see SECURITY.md.
 
 It also owns three background loops: the browser supervisor (login
 bootstrap, periodic reload, hang detection + forced restart), the JPEG
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import ipaddress
 import json
 import logging
 import os
@@ -38,6 +39,19 @@ from config import Settings, load_settings
 logger = logging.getLogger("dashboard_stream.server")
 
 SELECTION_FILE = "/data/dashboard_selection.json"
+
+# The ingress panel must be reachable by the Supervisor's ingress proxy and by
+# nobody else. It cannot simply bind to loopback: this app runs with
+# host_network, and for host-network apps the Supervisor connects to the
+# gateway of its own Docker network ("hassio", a fixed 172.30.32.0/23) rather
+# than to the app's loopback - so a loopback-bound panel is unreachable and
+# Home Assistant reports the app as "not ready". It therefore binds to all
+# interfaces and refuses every peer outside that network instead.
+INGRESS_ALLOWED_NETWORKS = (
+    ipaddress.ip_network("172.30.32.0/23"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+)
 SNAPSHOT_PATH = "/data/snapshot.jpg"
 INDEX_HTML = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
 
@@ -277,6 +291,37 @@ async def handle_status(request: web.Request) -> web.Response:
     )
 
 
+@web.middleware
+async def restrict_to_supervisor(request: web.Request, handler):
+    """Refuse ingress requests that do not come from the Supervisor.
+
+    The panel has no authentication of its own - it relies entirely on Home
+    Assistant having authenticated the user before proxying the request - so
+    this check is what keeps it off the LAN.
+    """
+    peer = request.remote
+    try:
+        address = ipaddress.ip_address(peer)
+    except (TypeError, ValueError):
+        logger.warning("Refusing ingress request from unparseable peer address %r", peer)
+        raise web.HTTPForbidden(text="Forbidden")
+
+    # A dual-stack listener reports IPv4 peers as ::ffff:a.b.c.d.
+    if getattr(address, "ipv4_mapped", None) is not None:
+        address = address.ipv4_mapped
+
+    if not any(address in network for network in INGRESS_ALLOWED_NETWORKS):
+        logger.warning(
+            "Refusing ingress request from %s: only Home Assistant's Supervisor "
+            "(%s) may reach the panel",
+            address,
+            ", ".join(str(network) for network in INGRESS_ALLOWED_NETWORKS),
+        )
+        raise web.HTTPForbidden(text="Forbidden")
+
+    return await handler(request)
+
+
 async def main() -> None:
     settings = load_settings()
     setup_logging(settings.log_level)
@@ -303,7 +348,7 @@ async def main() -> None:
     public_app.router.add_get("/snapshot.jpg", handle_snapshot)
     public_app.router.add_get("/health", handle_health)
 
-    ingress_app = web.Application()
+    ingress_app = web.Application(middlewares=[restrict_to_supervisor])
     ingress_app["settings"] = settings
     ingress_app["onvif_ctx"] = ctx
     ingress_app["http_session"] = http_session
@@ -321,8 +366,11 @@ async def main() -> None:
 
     ingress_runner = web.AppRunner(ingress_app)
     await ingress_runner.setup()
-    await web.TCPSite(ingress_runner, "127.0.0.1", settings.ingress_port).start()
-    logger.info("Ingress dashboard-picker panel on 127.0.0.1:%s (Supervisor-proxied only)", settings.ingress_port)
+    await web.TCPSite(ingress_runner, "0.0.0.0", settings.ingress_port).start()  # noqa: S104 - guarded by restrict_to_supervisor
+    logger.info(
+        "Ingress dashboard-picker panel on :%s (Supervisor-proxied only, other peers refused)",
+        settings.ingress_port,
+    )
 
     tasks = [
         asyncio.create_task(supervisor.run()),

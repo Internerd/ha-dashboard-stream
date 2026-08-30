@@ -68,6 +68,15 @@ network isolation. Two things are done to limit the blast radius of this:
   password on a process command line (visible to anything else able to
   inspect processes in the container), and cannot be used to publish from
   outside the container's own loopback.
+- The snapshot URL that ONVIF hands out carries a random 128-bit token
+  (`/snapshot.jpg?token=...`, stored in `/data/snapshot_token`). NVRs
+  routinely fetch that URL with a plain GET and never answer an HTTP 401,
+  so the token stands in for the credentials on that one endpoint. It is
+  only ever disclosed inside an authenticated `GetSnapshotUri` response,
+  but it is a bearer credential: anyone who obtains the URL can fetch
+  snapshots without the stream password. HTTP Basic with the stream
+  credentials keeps working, and deleting `/data/snapshot_token` issues a
+  new one on the next start.
 - The ingress dashboard-picker panel has no credentials of its own: it
   trusts Home Assistant to have authenticated the user before proxying the
   request. Since host networking prevents it from binding to loopback (the

@@ -4,6 +4,27 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-08-30
+
+### Fixed
+
+- A successfully adopted camera showed no picture in UniFi Protect. Two
+  causes, both visible in the log the previous release added:
+  - Protect asked for `GetVideoEncoderConfigurationOptions`, which this
+    device answered with "operation not supported". That call, and the
+    related `GetVideoEncoderConfiguration(s)`,
+    `GetVideoSourceConfiguration(s)`, `GetVideoSourceConfigurationOptions`
+    and `GetProfile`, are now implemented - all reporting the one fixed
+    profile this app streams.
+  - Protect fetched the snapshot URL with a plain GET and got HTTP 401 on
+    every attempt: it never answers the authentication challenge. The URL
+    returned by `GetSnapshotUri` now carries a random per-install token, so
+    such a fetch succeeds; HTTP Basic with the stream credentials still
+    works. See SECURITY.md for what that token is and how to rotate it.
+- The capture now encodes H.264 Main profile explicitly, which is what the
+  ONVIF service has always advertised - libx264 would otherwise default to
+  High, leaving the stream and the device description disagreeing.
+
 ## [1.2.0] - 2026-08-30
 
 ### Added

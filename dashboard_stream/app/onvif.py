@@ -75,11 +75,31 @@ def get_or_create_device_uuid(path: str = "/data/device_uuid") -> str:
     return value
 
 
+def get_or_create_snapshot_token(path: str = "/data/snapshot_token") -> str:
+    """Unguessable token that makes the snapshot URL work for plain HTTP GETs.
+
+    ONVIF clients are supposed to authenticate to the snapshot URI, but some
+    NVRs - UniFi Protect included - simply GET the URI returned by
+    GetSnapshotUri with no credentials and give up on the 401. The token is
+    handed out only inside authenticated GetSnapshotUri responses and stands
+    in for those credentials; HTTP Basic keeps working alongside it.
+    """
+    file = Path(path)
+    if file.exists():
+        value = file.read_text().strip()
+        if value:
+            return value
+    value = uuid.uuid4().hex
+    file.write_text(value)
+    return value
+
+
 @dataclass
 class OnvifContext:
     settings: Settings
     local_ip: str
     device_uuid: str
+    snapshot_token: str = ""
 
 
 class OnvifError(Exception):
@@ -271,30 +291,123 @@ def _get_video_sources(ctx: OnvifContext) -> str:
     </trt:GetVideoSourcesResponse>"""
 
 
-def _get_profiles(ctx: OnvifContext) -> str:
+def _video_source_config_body(ctx: OnvifContext) -> str:
     s = ctx.settings
+    return f"""      <tt:Name>VideoSourceConfig</tt:Name>
+      <tt:UseCount>1</tt:UseCount>
+      <tt:SourceToken>vs_1</tt:SourceToken>
+      <tt:Bounds x="0" y="0" width="{s.stream_width}" height="{s.stream_height}"/>"""
+
+
+def _video_encoder_config_body(ctx: OnvifContext) -> str:
+    s = ctx.settings
+    return f"""      <tt:Name>VideoEncoderConfig</tt:Name>
+      <tt:UseCount>1</tt:UseCount>
+      <tt:Encoding>H264</tt:Encoding>
+      <tt:Resolution><tt:Width>{s.stream_width}</tt:Width><tt:Height>{s.stream_height}</tt:Height></tt:Resolution>
+      <tt:Quality>5</tt:Quality>
+      <tt:RateControl>
+        <tt:FrameRateLimit>{s.framerate}</tt:FrameRateLimit>
+        <tt:EncodingInterval>1</tt:EncodingInterval>
+        <tt:BitrateLimit>2500</tt:BitrateLimit>
+      </tt:RateControl>
+      <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>Main</tt:H264Profile></tt:H264>
+      <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
+
+
+def _profile_body(ctx: OnvifContext) -> str:
+    return f"""      <tt:Name>Dashboard</tt:Name>
+      <tt:VideoSourceConfiguration token="vsc_1">
+{_video_source_config_body(ctx)}
+      </tt:VideoSourceConfiguration>
+      <tt:VideoEncoderConfiguration token="vec_1">
+{_video_encoder_config_body(ctx)}
+      </tt:VideoEncoderConfiguration>"""
+
+
+def _get_video_encoder_configurations(ctx: OnvifContext) -> str:
+    return f"""    <trt:GetVideoEncoderConfigurationsResponse>
+      <trt:Configurations token="vec_1">
+{_video_encoder_config_body(ctx)}
+      </trt:Configurations>
+    </trt:GetVideoEncoderConfigurationsResponse>"""
+
+
+def _get_video_encoder_configuration(ctx: OnvifContext) -> str:
+    return f"""    <trt:GetVideoEncoderConfigurationResponse>
+      <trt:Configuration token="vec_1">
+{_video_encoder_config_body(ctx)}
+      </trt:Configuration>
+    </trt:GetVideoEncoderConfigurationResponse>"""
+
+
+def _get_video_encoder_configuration_options(ctx: OnvifContext) -> str:
+    """What the encoder *could* do - here: exactly what it does do.
+
+    The stream is a fixed rendering pipeline, so every range is reported as a
+    single value. NVRs ask for this before they will show a stream; refusing
+    it is what stopped UniFi Protect.
+    """
+    s = ctx.settings
+    return f"""    <trt:GetVideoEncoderConfigurationOptionsResponse>
+      <trt:Options>
+        <tt:QualityRange><tt:Min>1</tt:Min><tt:Max>10</tt:Max></tt:QualityRange>
+        <tt:H264>
+          <tt:ResolutionsAvailable>
+            <tt:Width>{s.stream_width}</tt:Width><tt:Height>{s.stream_height}</tt:Height>
+          </tt:ResolutionsAvailable>
+          <tt:GovLengthRange><tt:Min>{s.framerate * 2}</tt:Min><tt:Max>{s.framerate * 2}</tt:Max></tt:GovLengthRange>
+          <tt:FrameRateRange><tt:Min>{s.framerate}</tt:Min><tt:Max>{s.framerate}</tt:Max></tt:FrameRateRange>
+          <tt:EncodingIntervalRange><tt:Min>1</tt:Min><tt:Max>1</tt:Max></tt:EncodingIntervalRange>
+          <tt:H264ProfilesSupported>Main</tt:H264ProfilesSupported>
+        </tt:H264>
+      </trt:Options>
+    </trt:GetVideoEncoderConfigurationOptionsResponse>"""
+
+
+def _get_video_source_configurations(ctx: OnvifContext) -> str:
+    return f"""    <trt:GetVideoSourceConfigurationsResponse>
+      <trt:Configurations token="vsc_1">
+{_video_source_config_body(ctx)}
+      </trt:Configurations>
+    </trt:GetVideoSourceConfigurationsResponse>"""
+
+
+def _get_video_source_configuration(ctx: OnvifContext) -> str:
+    return f"""    <trt:GetVideoSourceConfigurationResponse>
+      <trt:Configuration token="vsc_1">
+{_video_source_config_body(ctx)}
+      </trt:Configuration>
+    </trt:GetVideoSourceConfigurationResponse>"""
+
+
+def _get_video_source_configuration_options(ctx: OnvifContext) -> str:
+    s = ctx.settings
+    return f"""    <trt:GetVideoSourceConfigurationOptionsResponse>
+      <trt:Options>
+        <tt:BoundsRange>
+          <tt:XRange><tt:Min>0</tt:Min><tt:Max>0</tt:Max></tt:XRange>
+          <tt:YRange><tt:Min>0</tt:Min><tt:Max>0</tt:Max></tt:YRange>
+          <tt:WidthRange><tt:Min>{s.stream_width}</tt:Min><tt:Max>{s.stream_width}</tt:Max></tt:WidthRange>
+          <tt:HeightRange><tt:Min>{s.stream_height}</tt:Min><tt:Max>{s.stream_height}</tt:Max></tt:HeightRange>
+        </tt:BoundsRange>
+        <tt:VideoSourceTokensAvailable>vs_1</tt:VideoSourceTokensAvailable>
+      </trt:Options>
+    </trt:GetVideoSourceConfigurationOptionsResponse>"""
+
+
+def _get_profile(ctx: OnvifContext) -> str:
+    return f"""    <trt:GetProfileResponse>
+      <trt:Profile token="profile_1" fixed="true">
+{_profile_body(ctx)}
+      </trt:Profile>
+    </trt:GetProfileResponse>"""
+
+
+def _get_profiles(ctx: OnvifContext) -> str:
     return f"""    <trt:GetProfilesResponse>
       <trt:Profiles token="profile_1" fixed="true">
-        <tt:Name>Dashboard</tt:Name>
-        <tt:VideoSourceConfiguration token="vsc_1">
-          <tt:Name>VideoSourceConfig</tt:Name>
-          <tt:UseCount>1</tt:UseCount>
-          <tt:SourceToken>vs_1</tt:SourceToken>
-          <tt:Bounds x="0" y="0" width="{s.stream_width}" height="{s.stream_height}"/>
-        </tt:VideoSourceConfiguration>
-        <tt:VideoEncoderConfiguration token="vec_1">
-          <tt:Name>VideoEncoderConfig</tt:Name>
-          <tt:UseCount>1</tt:UseCount>
-          <tt:Encoding>H264</tt:Encoding>
-          <tt:Resolution><tt:Width>{s.stream_width}</tt:Width><tt:Height>{s.stream_height}</tt:Height></tt:Resolution>
-          <tt:Quality>5</tt:Quality>
-          <tt:RateControl>
-            <tt:FrameRateLimit>{s.framerate}</tt:FrameRateLimit>
-            <tt:EncodingInterval>1</tt:EncodingInterval>
-            <tt:BitrateLimit>2500</tt:BitrateLimit>
-          </tt:RateControl>
-          <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>Main</tt:H264Profile></tt:H264>
-        </tt:VideoEncoderConfiguration>
+{_profile_body(ctx)}
       </trt:Profiles>
     </trt:GetProfilesResponse>"""
 
@@ -312,7 +425,11 @@ def _get_stream_uri(ctx: OnvifContext) -> str:
 
 
 def _get_snapshot_uri(ctx: OnvifContext) -> str:
+    # The token rides along so that a client which just GETs this URI without
+    # credentials still gets a picture; see get_or_create_snapshot_token.
     uri = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/snapshot.jpg"
+    if ctx.snapshot_token:
+        uri = f"{uri}?token={ctx.snapshot_token}"
     return f"""    <trt:GetSnapshotUriResponse>
       <trt:MediaUri>
         <tt:Uri>{uri}</tt:Uri>
@@ -335,8 +452,15 @@ _HANDLERS = {
     "GetServices": _get_services,
     "GetVideoSources": _get_video_sources,
     "GetProfiles": _get_profiles,
+    "GetProfile": _get_profile,
     "GetStreamUri": _get_stream_uri,
     "GetSnapshotUri": _get_snapshot_uri,
+    "GetVideoEncoderConfigurations": _get_video_encoder_configurations,
+    "GetVideoEncoderConfiguration": _get_video_encoder_configuration,
+    "GetVideoEncoderConfigurationOptions": _get_video_encoder_configuration_options,
+    "GetVideoSourceConfigurations": _get_video_source_configurations,
+    "GetVideoSourceConfiguration": _get_video_source_configuration,
+    "GetVideoSourceConfigurationOptions": _get_video_source_configuration_options,
 }
 
 

@@ -25,6 +25,7 @@ import ipaddress
 import json
 import logging
 import os
+import secrets
 import subprocess
 import time
 from pathlib import Path
@@ -215,7 +216,20 @@ async def handle_onvif(request: web.Request) -> web.Response:
 
 async def handle_snapshot(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
-    if not check_basic_auth(request, settings.stream_username, settings.stream_password):
+    ctx: onvif.OnvifContext = request.app["onvif_ctx"]
+    # Either the stream credentials, or the token this device only ever hands
+    # out in an authenticated GetSnapshotUri response - NVRs commonly fetch
+    # that URI with a plain GET and never answer the 401.
+    token = request.query.get("token", "")
+    authorised = check_basic_auth(request, settings.stream_username, settings.stream_password) or (
+        bool(ctx.snapshot_token) and secrets.compare_digest(token, ctx.snapshot_token)
+    )
+    if not authorised:
+        logger.warning(
+            "Snapshot request from %s refused: no valid credentials and no snapshot token. "
+            "An NVR should use the URI from GetSnapshotUri, which carries the token.",
+            request.remote,
+        )
         return web.Response(status=401, headers={"WWW-Authenticate": 'Basic realm="dashboard-stream"'})
     if not os.path.exists(SNAPSHOT_PATH):
         return web.Response(status=503, text="Snapshot not ready yet, try again shortly.")
@@ -421,7 +435,12 @@ async def main() -> None:
 
     device_uuid = onvif.get_or_create_device_uuid()
     local_ip = resolve_advertised_ip(settings)
-    ctx = onvif.OnvifContext(settings=settings, local_ip=local_ip, device_uuid=device_uuid)
+    ctx = onvif.OnvifContext(
+        settings=settings,
+        local_ip=local_ip,
+        device_uuid=device_uuid,
+        snapshot_token=onvif.get_or_create_snapshot_token(),
+    )
 
     http_session = aiohttp.ClientSession()
 

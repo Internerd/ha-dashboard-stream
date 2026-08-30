@@ -208,6 +208,14 @@ Python app (aiohttp, one process):
 - **UniFi Protect can't discover the camera** - use the manual RTSP entry
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
+- **The NVR adopted the camera but shows no picture** - check the log for
+  `GET /snapshot.jpg ... 401` and for an ONVIF operation logged as not
+  implemented. Both were what stopped UniFi Protect before 1.3.0: it asked
+  for `GetVideoEncoderConfigurationOptions` (now implemented, along with the
+  other encoder/source configuration calls) and fetched the snapshot URL
+  without credentials (that URL now carries a token). If a different
+  operation shows up as not implemented, that log line is exactly what to
+  report.
 - **The NVR says the credentials are invalid** - first check the app log
   while you retry. An RTSP attempt logs `[RTSP] [conn <address>] opened`
   and, if the password does not match, `failed to authenticate`. An ONVIF attempt now logs exactly what was refused

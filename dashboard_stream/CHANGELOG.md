@@ -4,6 +4,31 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-08-30
+
+### Fixed
+
+- Xvfb printed a block of `Could not resolve keysym XF86...` warnings from
+  the XKEYBOARD keymap compiler on every start (current Alpine ships
+  xkeyboard-config data newer than the keysym table `xkbcomp` was built
+  with). Exactly those lines are now filtered out of Xvfb's stderr; real X
+  server errors still reach the log.
+- ffmpeg warned `Stream #0: not enough frames to estimate rate; consider
+  increasing probesize` on every capture start: a single raw 1920x1080
+  frame is ~8 MB, above ffmpeg's 5 MB default probe size, so the input
+  probe never saw a full frame. Capture now runs with `-probesize 64M`.
+- Xvfb ran with `-nolisten unix`, which suppressed the `/tmp/.X11-unix/X99`
+  socket entirely, so the Chromium service's readiness check for it could
+  never succeed and always burned its full 30 second timeout before
+  starting the browser.
+
+### Changed
+
+- Xvfb now uses `-nolisten local` instead of `-nolisten unix`: with
+  `host_network` enabled, X's *abstract* socket is scoped to the shared
+  network namespace and therefore reachable from the host, while the plain
+  socket it now uses lives in this container's own `/tmp`.
+
 ## [1.0.2] - 2026-08-30
 
 ### Fixed

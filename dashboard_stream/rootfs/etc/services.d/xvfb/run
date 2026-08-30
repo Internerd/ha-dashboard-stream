@@ -6,4 +6,20 @@ set -e
 
 rm -f "/tmp/.X99-lock"
 bashio::log.info "Starting Xvfb on ${DISPLAY} (${STREAM_WIDTH}x${STREAM_HEIGHT})"
-exec Xvfb "${DISPLAY}" -screen 0 "${STREAM_WIDTH}x${STREAM_HEIGHT}x24" -nolisten tcp -nolisten unix
+
+# -nolisten tcp:   no network listener at all.
+# -nolisten local: no *abstract* unix socket either. This app runs with
+#                  host_network, and abstract sockets are scoped to the
+#                  network namespace - so an abstract X socket would be
+#                  reachable from the host. The plain socket below lives in
+#                  this container's own /tmp and is not.
+#
+# Xvfb compiles the default keymap at startup; on current Alpine the
+# xkeyboard-config data is newer than the keysym table xkbcomp was built
+# with, which produces a wall of harmless "Could not resolve keysym XF86..."
+# warnings. Drop exactly those lines - real X errors still come through.
+exec Xvfb "${DISPLAY}" \
+    -screen 0 "${STREAM_WIDTH}x${STREAM_HEIGHT}x24" \
+    -nolisten tcp \
+    -nolisten local \
+    2> >(grep --line-buffered -vE '^(The XKEYBOARD keymap compiler|> Warning:|Errors from xkbcomp)' >&2)

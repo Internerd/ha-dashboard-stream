@@ -187,6 +187,9 @@ Python app (aiohttp, one process):
 - **High CPU** - lower `resolution`/`framerate`; software-rendering a
   browser is inherently more expensive than a real camera's hardware
   encoder, especially on Raspberry Pi-class hardware.
+- **`Could not resolve keysym XF86...` in the log** - these came from
+  Xvfb's keymap compiler and are filtered out; the virtual display has no
+  keyboard attached in the first place, so they never meant anything.
 - **`dbus`/`gcm` errors in the log** - Chromium probes a system and a
   session D-Bus and Google's push-messaging endpoint on startup. The
   container runs its own minimal, container-local D-Bus pair and disables

@@ -14,7 +14,11 @@ for _ in $(seq 1 30); do
 done
 
 bashio::log.info "Capturing ${DISPLAY} -> rtsp://127.0.0.1:${RTSP_PORT}/stream (${STREAM_WIDTH}x${STREAM_HEIGHT}@${STREAM_FRAMERATE})"
+# -probesize: one raw 1920x1080 frame is ~8 MB, well over ffmpeg's 5 MB
+# default, so the input probe never saw a full frame and warned "not enough
+# frames to estimate rate". The rate is passed explicitly below anyway.
 exec ffmpeg -hide_banner -loglevel warning -nostdin \
+    -probesize 64M \
     -f x11grab -draw_mouse 0 \
     -video_size "${STREAM_WIDTH}x${STREAM_HEIGHT}" -framerate "${STREAM_FRAMERATE}" -i "${DISPLAY}" \
     -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \

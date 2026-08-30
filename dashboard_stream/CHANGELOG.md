@@ -4,6 +4,24 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-08-30
+
+### Fixed
+
+- The JPEG snapshot was never produced, so `/snapshot.jpg` answered 503 for
+  the lifetime of the app and NVR thumbnails stayed empty. The capture wrote
+  to `snapshot.jpg.tmp`, and ffmpeg picks its output format from the file
+  extension: `.tmp` is not one it knows, so it refused to open the output
+  every single time. The temp file is now written with an explicit
+  `-f image2 -c:v mjpeg`, verified to produce a valid JPEG of the rendered
+  dashboard.
+- That failure was invisible: ffmpeg's stderr went to `/dev/null` and a
+  non-zero exit was not reported. The loop now logs when capture starts
+  failing (with ffmpeg's own message) and when it recovers - once per state
+  change, not once per interval.
+- The snapshot is taken from the display named by `DISPLAY` rather than a
+  hard-coded `:99`, and without the mouse pointer, matching the video capture.
+
 ## [1.3.0] - 2026-08-30
 
 ### Fixed

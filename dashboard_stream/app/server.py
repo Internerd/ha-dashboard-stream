@@ -168,21 +168,50 @@ class BrowserSupervisor:
 
 
 async def snapshot_loop(settings: Settings, interval: int = 10) -> None:
+    """Keep a current JPEG of the rendered dashboard on disk for NVR thumbnails.
+
+    The temp file is written with an explicit format: ffmpeg picks the muxer
+    from the file extension, and ".jpg.tmp" is not one it recognises - it
+    refuses to open the output and no snapshot is ever produced.
+
+    Failures are reported when the state changes rather than on every pass, so
+    a broken capture is visible in the log without repeating every interval.
+    """
     tmp_path = SNAPSHOT_PATH + ".tmp"
     size = f"{settings.stream_width}x{settings.stream_height}"
+    display = os.environ.get("DISPLAY", ":99")
+    last_ok: bool | None = None
     while True:
+        ok = False
+        detail = ""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "ffmpeg", "-y", "-f", "x11grab", "-video_size", size, "-i", ":99",
-                "-vframes", "1", "-q:v", "5", tmp_path,
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "x11grab", "-draw_mouse", "0", "-video_size", size, "-i", display,
+                "-frames:v", "1", "-f", "image2", "-c:v", "mjpeg", "-q:v", "5", tmp_path,
                 stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
-            await proc.wait()
-            if proc.returncode == 0 and os.path.exists(tmp_path):
+            _, stderr = await proc.communicate()
+            ok = proc.returncode == 0 and os.path.exists(tmp_path)
+            if ok:
                 os.replace(tmp_path, SNAPSHOT_PATH)
-        except OSError:
-            logger.debug("snapshot capture failed", exc_info=True)
+            else:
+                lines = stderr.decode("utf-8", "replace").strip().splitlines()
+                detail = lines[-1] if lines else f"ffmpeg exited with {proc.returncode}"
+        except OSError as err:  # noqa: PERF203 - the loop must survive a failed spawn
+            detail = str(err)
+
+        if ok != last_ok:
+            if ok:
+                logger.info("Snapshot capture is working; /snapshot.jpg is being served")
+            else:
+                logger.warning(
+                    "Snapshot capture is failing, so /snapshot.jpg answers 503 and NVR "
+                    "thumbnails stay empty: %s",
+                    detail,
+                )
+            last_ok = ok
         await asyncio.sleep(interval)
 
 

@@ -4,6 +4,27 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-30
+
+### Added
+
+- `advertise_ip` option: the address handed to ONVIF/RTSP clients in the
+  stream URL, the ONVIF service addresses and the WS-Discovery replies.
+  Left empty it keeps the previous behavior (the address of the host's
+  default route). On a host with several interfaces or VLANs that address
+  can be one the NVR cannot reach, which made the camera appear
+  unreachable even though the stream was being served on every interface
+  all along. An invalid value falls back to auto-detection with a warning.
+
+### Changed
+
+- The startup log now states which address is advertised and where it came
+  from (`advertise_ip` or auto-detection), and says what to set if the NVR
+  cannot reach it.
+- DOCS.md now spells out that Home Assistant does not proxy the stream at
+  all: with host networking the RTSP/ONVIF/snapshot ports sit directly on
+  the host's interfaces and NVRs connect to them straight.
+
 ## [1.0.5] - 2026-08-30
 
 ### Fixed

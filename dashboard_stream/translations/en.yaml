@@ -56,6 +56,15 @@ configuration:
   onvif_device_name:
     name: ONVIF device name
     description: Friendly name reported to ONVIF/NVR clients such as UniFi Protect.
+  advertise_ip:
+    name: Advertised IP address (advanced)
+    description: >-
+      IP address this app tells ONVIF/RTSP clients to connect to. Leave
+      empty to use the address of the host's default route, which is right
+      on a single-network host. Set it if Home Assistant has several
+      network interfaces or VLANs and your NVR sits on one the default
+      route does not lead to - the stream itself always listens on every
+      interface, only the address handed out needs correcting.
   stream_username:
     name: Stream username
     description: Username required to view the RTSP stream and ONVIF service.

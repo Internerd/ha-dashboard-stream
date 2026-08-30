@@ -352,6 +352,37 @@ async def handle_status(request: web.Request) -> web.Response:
     )
 
 
+def resolve_advertised_ip(settings: Settings) -> str:
+    """Decide which address ONVIF, WS-Discovery and the panel hand out.
+
+    Every service listens on all interfaces regardless; this is only the
+    address clients are *told* to connect to. Auto-detection follows the
+    host's default route, which is wrong when the NVR sits on an interface
+    that route does not lead to - hence the advertise_ip option.
+    """
+    configured = settings.advertise_ip.strip()
+    if configured:
+        try:
+            ipaddress.ip_address(configured)
+        except ValueError:
+            logger.warning(
+                "advertise_ip %r is not a valid IP address, falling back to auto-detection",
+                configured,
+            )
+        else:
+            logger.info("Advertising %s to ONVIF/RTSP clients (advertise_ip)", configured)
+            return configured
+
+    detected = onvif.get_local_ip()
+    logger.info(
+        "Advertising %s to ONVIF/RTSP clients (auto-detected from the host's default "
+        "route). If your NVR cannot reach the stream at this address, set advertise_ip "
+        "to the address it should use - the stream itself listens on every interface.",
+        detected,
+    )
+    return detected
+
+
 @web.middleware
 async def restrict_to_supervisor(request: web.Request, handler):
     """Refuse ingress requests that do not come from the Supervisor.
@@ -389,9 +420,8 @@ async def main() -> None:
     logger.info("Dashboard Stream Cam starting")
 
     device_uuid = onvif.get_or_create_device_uuid()
-    local_ip = onvif.get_local_ip()
+    local_ip = resolve_advertised_ip(settings)
     ctx = onvif.OnvifContext(settings=settings, local_ip=local_ip, device_uuid=device_uuid)
-    logger.info("Detected LAN address: %s (verify this in a multi-NIC host)", local_ip)
 
     http_session = aiohttp.ClientSession()
 

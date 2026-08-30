@@ -38,6 +38,7 @@ class Settings:
     onvif_port: int
     onvif_enabled: bool
     onvif_device_name: str
+    advertise_ip: str
     stream_username: str
     stream_password: str
     watchdog_interval: int
@@ -69,6 +70,7 @@ def load_settings() -> Settings:
         onvif_port=_int(env.get("ONVIF_PORT"), 8080),
         onvif_enabled=_bool(env.get("ONVIF_ENABLED"), True),
         onvif_device_name=env.get("ONVIF_DEVICE_NAME", "Dashboard Stream Cam"),
+        advertise_ip=env.get("ADVERTISE_IP", "").strip(),
         stream_username=env.get("STREAM_USERNAME", "viewer"),
         stream_password=env.get("STREAM_PASSWORD", ""),
         watchdog_interval=_int(env.get("WATCHDOG_INTERVAL"), 15),

@@ -96,6 +96,7 @@ camera.
 | `rtsp_port` / `onvif_port` | Fixed TCP ports for the stream and the ONVIF/snapshot service. Leave at the defaults (8554/8080) unless they conflict with something else on your host - the Supervisor-level watchdog is wired to the default ONVIF port. |
 | `onvif_enabled` | Turns the ONVIF service and WS-Discovery responder on/off. The RTSP stream keeps working either way. |
 | `onvif_device_name` | Friendly name reported to ONVIF/NVR clients. |
+| `advertise_ip` | IP address handed out to ONVIF/RTSP clients (stream URL, ONVIF service addresses, WS-Discovery). Empty = auto-detect from the host's default route. Set it when Home Assistant has several interfaces/VLANs and your NVR is not on the default-route one. It changes only the *advertised* address - every service always listens on all interfaces. |
 | `stream_username` / `stream_password` | Credentials required for RTSP, ONVIF and the snapshot endpoint. Password is mandatory. |
 | `watchdog_interval` / `stall_timeout` | How often, and after how long without a response, the internal watchdog force-restarts a hung browser. |
 | `log_level` | Log verbosity. |
@@ -186,6 +187,14 @@ Python app (aiohttp, one process):
 - **UniFi Protect can't discover the camera** - use the manual RTSP entry
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
+- **UniFi Protect finds the camera but cannot pull the stream** - the
+  address it was handed is probably on the wrong interface. The app
+  advertises the address of the host's default route, which is not
+  necessarily the one your NVR can reach on a multi-VLAN host. Check the
+  `Advertising … to ONVIF/RTSP clients` line in the log and, if it names
+  the wrong address, set `advertise_ip` to the one the NVR should use. The
+  stream itself listens on every interface, so nothing else needs
+  changing.
 - **High CPU** - lower `resolution`/`framerate`; software-rendering a
   browser is inherently more expensive than a real camera's hardware
   encoder, especially on Raspberry Pi-class hardware.
@@ -233,6 +242,12 @@ in the repository for the full picture, in short:
   panel listens on all interfaces but refuses every request whose peer is
   outside that network (and loopback); refused requests are logged with
   the address they came from.
+- Nothing about the stream is proxied by Home Assistant: with host
+  networking the RTSP, ONVIF and snapshot ports sit directly on the host's
+  interfaces, and an NVR connects to them straight, not through Home
+  Assistant. Only the ingress panel goes through the Supervisor. So the
+  stream carries no Home Assistant TLS or authentication - it is protected
+  by the stream credentials alone.
 - The RTSP/ONVIF/snapshot ports **are** LAN-reachable by design (that's
   the point - they need to work like a normal IP camera), and are gated by
   the username/password you configure. Anyone with those credentials and

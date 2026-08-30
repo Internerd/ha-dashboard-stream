@@ -72,7 +72,10 @@ configuration:
     name: Stream password
     description: >-
       Password required to view the RTSP stream and ONVIF service. Required
-      - the app refuses to start with an empty password.
+      - the app refuses to start with an empty password. The RTSP server
+      only accepts letters, digits and ! $ ( ) * + . ; < = > [ ] ^ _ - { }
+      @ # & - no spaces, colons, slashes or quotes; the app refuses to start
+      rather than let an NVR fail with a confusing "invalid credentials".
   watchdog_interval:
     name: Watchdog interval (seconds)
     description: How often the internal watchdog checks the render/stream pipeline.

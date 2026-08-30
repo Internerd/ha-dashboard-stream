@@ -97,7 +97,7 @@ camera.
 | `onvif_enabled` | Turns the ONVIF service and WS-Discovery responder on/off. The RTSP stream keeps working either way. |
 | `onvif_device_name` | Friendly name reported to ONVIF/NVR clients. |
 | `advertise_ip` | IP address handed out to ONVIF/RTSP clients (stream URL, ONVIF service addresses, WS-Discovery). Empty = auto-detect from the host's default route. Set it when Home Assistant has several interfaces/VLANs and your NVR is not on the default-route one. It changes only the *advertised* address - every service always listens on all interfaces. |
-| `stream_username` / `stream_password` | Credentials required for RTSP, ONVIF and the snapshot endpoint. Password is mandatory. |
+| `stream_username` / `stream_password` | Credentials required for RTSP, ONVIF and the snapshot endpoint. Password is mandatory. The embedded RTSP server accepts only letters, digits and `! $ ( ) * + . ; < = > [ ] ^ _ - { } @ # &` in either value - no spaces, colons, slashes or quotes. Anything else is rejected at startup with a message rather than silently breaking authentication. |
 | `watchdog_interval` / `stall_timeout` | How often, and after how long without a response, the internal watchdog force-restarts a hung browser. |
 | `log_level` | Log verbosity. |
 
@@ -188,7 +188,8 @@ Python app (aiohttp, one process):
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
 - **The NVR says the credentials are invalid** - first check the app log
-  while you retry. An ONVIF attempt now logs exactly what was refused
+  while you retry. An RTSP attempt logs `[RTSP] [conn <address>] opened`
+  and, if the password does not match, `failed to authenticate`. An ONVIF attempt now logs exactly what was refused
   (`ONVIF: refused GetStreamUri from … - password digest does not match
   stream_password`, a wrong username, a clock more than 300 s off, or an
   operation this device does not implement). If nothing appears at all, the

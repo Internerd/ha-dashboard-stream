@@ -105,6 +105,30 @@ async def reload_page(session: aiohttp.ClientSession, cdp_port: int, ignore_cach
     await cdp_call(session, cdp_port, "Page.reload", {"ignoreCache": ignore_cache})
 
 
+async def describe_page(session: aiohttp.ClientSession, cdp_port: int, timeout: float = 10) -> dict:
+    """What the kiosk is actually showing - the stream is a picture of this.
+
+    A blank page produces a uniform image that looks like a broken stream on
+    an NVR, so it is worth stating in the log rather than leaving to guesswork.
+    """
+    expression = (
+        "JSON.stringify({"
+        "url: location.href,"
+        "title: document.title,"
+        "state: document.readyState,"
+        "characters: document.body ? document.body.innerText.trim().length : 0,"
+        "elements: document.body ? document.body.getElementsByTagName('*').length : 0"
+        "})"
+    )
+    result = await cdp_call(
+        session, cdp_port, "Runtime.evaluate", {"expression": expression, "returnByValue": True}, timeout=timeout
+    )
+    value = result.get("result", {}).get("value")
+    if not value:
+        raise BrowserError("page returned no description")
+    return json.loads(value)
+
+
 async def ping(session: aiohttp.ClientSession, cdp_port: int, timeout: float = 5) -> bool:
     try:
         result = await cdp_call(

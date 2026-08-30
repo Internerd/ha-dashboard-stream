@@ -31,6 +31,15 @@ done
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || echo /usr/bin/chromium)"
 bashio::log.info "Starting Chromium kiosk (binary: ${CHROMIUM_BIN}) -> ${DASHBOARD_URL}"
 
+# Home Assistant's frontend follows the browser's prefers-color-scheme when the
+# user's theme is set to Auto, and Chromium derives that from its native theme -
+# which --force-dark-mode switches. There is no matching "force light" switch;
+# light is what an unforced Chromium already reports.
+COLOR_SCHEME_ARGS=()
+if [ "${COLOR_SCHEME:-auto}" = "dark" ]; then
+    COLOR_SCHEME_ARGS=(--force-dark-mode)
+fi
+
 # The commas below belong to --window-position/--window-size values, they do
 # not separate array elements.
 # shellcheck disable=SC2054
@@ -67,6 +76,7 @@ CHROMIUM_ARGS=( \
     --disable-sync \
     --disable-breakpad \
     --metrics-recording-only \
+    "${COLOR_SCHEME_ARGS[@]}" \
 )
 
 # Chromium log levels: 0=INFO 1=WARNING 2=ERROR 3=FATAL. --log-level is only

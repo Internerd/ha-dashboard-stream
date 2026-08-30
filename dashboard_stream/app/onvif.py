@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import datetime
+import fcntl
 import hashlib
 import logging
 import socket
@@ -75,6 +76,49 @@ def get_or_create_device_uuid(path: str = "/data/device_uuid") -> str:
     return value
 
 
+def get_mac_address(for_ip: str, device_uuid: str) -> str:
+    """MAC address to report over ONVIF, in aa:bb:cc:dd:ee:ff form.
+
+    NVRs key a camera by its MAC, so this has to be stable. The real address
+    of the interface holding the advertised IP is used when it can be found;
+    otherwise a locally-administered address is derived from the persistent
+    device UUID, which is stable across restarts as well.
+    """
+    try:
+        for _index, name in socket.if_nameindex():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                packed = fcntl.ioctl(  # SIOCGIFADDR
+                    sock.fileno(), 0x8915, struct.pack("256s", name[:15].encode())
+                )
+                if socket.inet_ntoa(packed[20:24]) != for_ip:
+                    continue
+            except OSError:
+                continue
+            finally:
+                sock.close()
+            try:
+                return Path(f"/sys/class/net/{name}/address").read_text().strip()
+            except OSError:
+                break
+    except OSError:
+        pass
+
+    # Locally administered address (second-least-significant bit of the first
+    # octet set, multicast bit clear) derived from the device UUID.
+    raw = bytearray(uuid.UUID(device_uuid).bytes[:6]) if _is_uuid(device_uuid) else bytearray(b"\x00" * 6)
+    raw[0] = (raw[0] | 0x02) & 0xFE
+    return ":".join(f"{b:02x}" for b in raw)
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
+
+
 def get_or_create_snapshot_token(path: str = "/data/snapshot_token") -> str:
     """Unguessable token that makes the snapshot URL work for plain HTTP GETs.
 
@@ -100,6 +144,7 @@ class OnvifContext:
     local_ip: str
     device_uuid: str
     snapshot_token: str = ""
+    mac_address: str = "00:00:00:00:00:00"
 
 
 class OnvifError(Exception):
@@ -291,6 +336,55 @@ def _get_video_sources(ctx: OnvifContext) -> str:
     </trt:GetVideoSourcesResponse>"""
 
 
+def _get_network_interfaces(ctx: OnvifContext) -> str:
+    """Report one interface with the advertised address and a MAC.
+
+    NVRs key a camera by its MAC address; UniFi Protect asks for this during
+    adoption and cannot finish setting the camera up without it.
+    """
+    return f"""    <tds:GetNetworkInterfacesResponse>
+      <tds:NetworkInterfaces token="eth0">
+        <tt:Enabled>true</tt:Enabled>
+        <tt:Info>
+          <tt:Name>eth0</tt:Name>
+          <tt:HwAddress>{escape(ctx.mac_address)}</tt:HwAddress>
+          <tt:MTU>1500</tt:MTU>
+        </tt:Info>
+        <tt:IPv4>
+          <tt:Enabled>true</tt:Enabled>
+          <tt:Config>
+            <tt:Manual>
+              <tt:Address>{escape(ctx.local_ip)}</tt:Address>
+              <tt:PrefixLength>24</tt:PrefixLength>
+            </tt:Manual>
+            <tt:DHCP>false</tt:DHCP>
+          </tt:Config>
+        </tt:IPv4>
+      </tds:NetworkInterfaces>
+    </tds:GetNetworkInterfacesResponse>"""
+
+
+def _get_hostname(ctx: OnvifContext) -> str:
+    return f"""    <tds:GetHostnameResponse>
+      <tds:HostnameInformation>
+        <tt:FromDHCP>false</tt:FromDHCP>
+        <tt:Name>{escape(ctx.settings.onvif_device_name)}</tt:Name>
+      </tds:HostnameInformation>
+    </tds:GetHostnameResponse>"""
+
+
+def _get_network_protocols(ctx: OnvifContext) -> str:
+    s = ctx.settings
+    return f"""    <tds:GetNetworkProtocolsResponse>
+      <tds:NetworkProtocols>
+        <tt:Name>HTTP</tt:Name><tt:Enabled>true</tt:Enabled><tt:Port>{s.onvif_port}</tt:Port>
+      </tds:NetworkProtocols>
+      <tds:NetworkProtocols>
+        <tt:Name>RTSP</tt:Name><tt:Enabled>true</tt:Enabled><tt:Port>{s.rtsp_port}</tt:Port>
+      </tds:NetworkProtocols>
+    </tds:GetNetworkProtocolsResponse>"""
+
+
 def _video_source_config_body(ctx: OnvifContext) -> str:
     s = ctx.settings
     return f"""      <tt:Name>VideoSourceConfig</tt:Name>
@@ -461,6 +555,9 @@ _HANDLERS = {
     "GetVideoSourceConfigurations": _get_video_source_configurations,
     "GetVideoSourceConfiguration": _get_video_source_configuration,
     "GetVideoSourceConfigurationOptions": _get_video_source_configuration_options,
+    "GetNetworkInterfaces": _get_network_interfaces,
+    "GetNetworkProtocols": _get_network_protocols,
+    "GetHostname": _get_hostname,
 }
 
 

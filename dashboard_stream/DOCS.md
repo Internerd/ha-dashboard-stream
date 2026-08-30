@@ -91,6 +91,7 @@ camera.
 | `dashboard_custom_url` | Advanced: render a full custom URL instead. |
 | `resolution` | Capture/output resolution. |
 | `framerate` | Output frame rate. |
+| `color_scheme` | `dark` renders the dashboard in dark mode, `light` forces light, `auto` leaves it to the browser (light). Works through the browser's `prefers-color-scheme`, so the Home Assistant user whose token this app uses must have its theme set to **Auto** - a theme pinned in that user's profile wins. |
 | `render_wait` | Seconds to let the page finish rendering before capture starts. |
 | `reload_interval` | Seconds between automatic page reloads (0 disables). Mitigates browser memory growth on long-running kiosks. |
 | `rtsp_port` / `onvif_port` | Fixed TCP ports for the stream and the ONVIF/snapshot service. Leave at the defaults (8554/8080) unless they conflict with something else on your host - the Supervisor-level watchdog is wired to the default ONVIF port. |
@@ -208,6 +209,17 @@ Python app (aiohttp, one process):
 - **UniFi Protect can't discover the camera** - use the manual RTSP entry
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
+- **Is the browser actually rendering anything?** Every start logs what the
+  kiosk ended up displaying: `Browser is showing <url> (title …, readyState
+  complete, N characters of text in M elements)`. `0 characters` means the
+  page is blank and the stream is a blank picture - check `ha_url`, the
+  dashboard path and the sign-in method. To see exactly what the camera
+  sees, open the snapshot URL from the `GetSnapshotUri` response in a
+  browser (it carries its own token).
+- **Don't read the snapshot's size from the access log.** For file
+  responses aiohttp logs the header size, not the image: a perfectly
+  healthy 12 kB JPEG appears as `"GET /snapshot.jpg…" 200 240`. The
+  `Snapshot capture is working … (N bytes)` line reports the real size.
 - **The NVR adopted the camera but shows no picture** - check the log for
   `GET /snapshot.jpg ... 401` and for an ONVIF operation logged as not
   implemented. Both were what stopped UniFi Protect before 1.3.0: it asked

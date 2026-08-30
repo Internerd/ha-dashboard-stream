@@ -4,6 +4,29 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-08-30
+
+### Added
+
+- `color_scheme` option: `dark` starts the kiosk browser with
+  `--force-dark-mode`, which is what Home Assistant's frontend follows when
+  the user's theme is set to Auto, so the streamed dashboard renders dark.
+  `light`/`auto` keep the previous behavior.
+- `GetNetworkInterfaces`, `GetNetworkProtocols` and `GetHostname`. UniFi
+  Protect asks for the first of these during adoption and this device
+  answered "operation not supported"; NVRs key a camera by its MAC address,
+  which is what that call is for. The address of the interface holding the
+  advertised IP is reported when it can be determined, otherwise a stable
+  locally-administered address derived from the persistent device UUID.
+- The browser supervisor now logs what the kiosk is actually displaying
+  after each start - URL, title, readyState and how much text and how many
+  elements the page has - and warns when the page is blank, since a blank
+  page streams as a blank picture and looks like a broken camera.
+- The snapshot log line reports the file's real size. This matters because
+  aiohttp's access log shows the header size for file responses, so a
+  healthy 12 kB JPEG appears there as `200 240` - documented in DOCS.md so
+  the number is not mistaken for a broken image.
+
 ## [1.3.1] - 2026-08-30
 
 ### Fixed

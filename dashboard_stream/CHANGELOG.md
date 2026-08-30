@@ -4,6 +4,31 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-08-30
+
+### Fixed
+
+- NVRs (UniFi Protect among them) failed to add the camera with "invalid
+  credentials". mediamtx offers only Basic authentication by default, while
+  NVRs commonly authenticate with Digest and report nothing more specific
+  than bad credentials when it is not offered. The generated RTSP config now
+  sets `rtspAuthMethods: [basic, digest]`; verified against mediamtx v1.20.0,
+  whose 401 previously carried a `Basic` challenge alone and now carries both.
+- Chromium's `Registration response error message: DEPRECATED_ENDPOINT`
+  lines survived the 1.0.2 flags. `--log-level` only takes effect once
+  logging has been initialised, so it is now paired with
+  `--enable-logging=stderr`, and the GCM/D-Bus noise lines are dropped from
+  Chromium's stderr as a backstop. Everything else Chromium logs still
+  reaches the app log, and `log_level: debug` keeps it all.
+
+### Added
+
+- ONVIF requests are now logged with the peer address and the outcome:
+  which operation was called, how it authenticated, or precisely why it was
+  refused (unknown username, wrong password, clock skew beyond 300 s,
+  missing WS-Security header) - and a warning naming any operation an NVR
+  asks for that this device does not implement. Passwords are never logged.
+
 ## [1.1.0] - 2026-08-30
 
 ### Added

@@ -100,41 +100,50 @@ class NotAuthorized(OnvifError):
 # WS-Security
 # ---------------------------------------------------------------------------
 
-def verify_security_header(envelope: ET.Element, username: str, password: str) -> bool:
+def check_security_header(envelope: ET.Element, username: str, password: str) -> tuple[bool, str]:
+    """Validate the WS-Security header, returning (ok, reason).
+
+    The reason is what makes a rejected NVR diagnosable: clients report
+    nothing more specific than "invalid credentials", so the device has to
+    say which part did not match. It never contains the password.
+    """
     ns = {"s": SOAP_NS, "wsse": WSSE_NS, "wsu": WSU_NS}
     header = envelope.find("s:Header", ns)
     if header is None:
-        return False
+        return False, "request has no SOAP header"
     security = header.find("wsse:Security", ns)
     if security is None:
-        return False
+        return False, "request has no WS-Security header"
     token = security.find("wsse:UsernameToken", ns)
     if token is None:
-        return False
+        return False, "WS-Security header has no UsernameToken"
     user_el = token.find("wsse:Username", ns)
     pass_el = token.find("wsse:Password", ns)
     nonce_el = token.find("wsse:Nonce", ns)
     created_el = token.find("wsu:Created", ns)
     if user_el is None or pass_el is None:
-        return False
-    if (user_el.text or "") != username:
-        return False
+        return False, "UsernameToken is missing Username or Password"
+    supplied_user = user_el.text or ""
+    if supplied_user != username:
+        return False, f"username {supplied_user!r} does not match the configured stream_username"
     supplied = pass_el.text or ""
     password_type = pass_el.get("Type", "")
 
     if nonce_el is None or created_el is None or "PasswordText" in password_type:
         # Plain-text password fallback for clients that don't implement digest auth.
-        return supplied == password
+        if supplied == password:
+            return True, "plain-text password"
+        return False, "plain-text password does not match stream_password"
 
     try:
         nonce_raw = base64.b64decode(nonce_el.text or "")
     except (ValueError, TypeError):
-        return False
+        return False, "Nonce is not valid base64"
     created = created_el.text or ""
     digest_input = nonce_raw + created.encode("utf-8") + password.encode("utf-8")
     expected = base64.b64encode(hashlib.sha1(digest_input).digest()).decode("ascii")  # noqa: S324 - WS-Security mandates SHA1
     if expected != supplied:
-        return False
+        return False, "password digest does not match stream_password"
 
     for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
         try:
@@ -143,9 +152,19 @@ def verify_security_header(envelope: ET.Element, username: str, password: str) -
         except ValueError:
             created_dt = None
     if created_dt is None:
-        return True  # unparsable timestamp: digest already matched, don't hard-fail on clock format
-    now = datetime.datetime.now(datetime.timezone.utc)
-    return abs((now - created_dt).total_seconds()) <= 300
+        # Unparsable timestamp: the digest already matched, so don't hard-fail
+        # on a clock format this parser does not know.
+        return True, "password digest (timestamp format not recognised)"
+    skew = abs((datetime.datetime.now(datetime.timezone.utc) - created_dt).total_seconds())
+    if skew > 300:
+        return False, f"timestamp is {int(skew)}s off this device's clock (limit 300s)"
+    return True, "password digest"
+
+
+def verify_security_header(envelope: ET.Element, username: str, password: str) -> bool:
+    """Boolean form of :func:`check_security_header`."""
+    ok, _reason = check_security_header(envelope, username, password)
+    return ok
 
 
 # ---------------------------------------------------------------------------
@@ -321,15 +340,23 @@ _HANDLERS = {
 }
 
 
-def handle_soap_request(raw_body: bytes, ctx: OnvifContext) -> str:
+def handle_soap_request(raw_body: bytes, ctx: OnvifContext, peer: str = "?") -> str:
+    """Dispatch one ONVIF SOAP request.
+
+    Every outcome is logged with the peer address: an NVR that refuses to
+    pair says no more than "invalid credentials", so the device side has to
+    be the one that records what was actually asked for and what failed.
+    """
     try:
         envelope = ET.fromstring(raw_body)
     except ET.ParseError as exc:
+        logger.warning("ONVIF request from %s is not valid XML: %s", peer, exc)
         raise OnvifError("s:Sender", "s:Client", f"Malformed SOAP request: {exc}", http_status=400) from exc
 
     ns = {"s": SOAP_NS}
     body = envelope.find("s:Body", ns)
     if body is None or len(body) == 0:
+        logger.warning("ONVIF request from %s has an empty SOAP body", peer)
         raise OnvifError("s:Sender", "s:Client", "SOAP Body is empty.", http_status=400)
 
     op_elem = list(body)[0]
@@ -337,11 +364,22 @@ def handle_soap_request(raw_body: bytes, ctx: OnvifContext) -> str:
 
     handler = _HANDLERS.get(op_name)
     if handler is None:
+        logger.warning(
+            "ONVIF: %s asked for %r, which this device does not implement. If your NVR "
+            "needs it, please report it with this log line.",
+            peer,
+            op_name,
+        )
         raise OnvifError("s:Sender", "ter:ActionNotSupported", f"Unsupported operation: {op_name}", http_status=400)
 
-    if op_name not in UNAUTHENTICATED_OPERATIONS:
-        if not verify_security_header(envelope, ctx.settings.stream_username, ctx.settings.stream_password):
+    if op_name in UNAUTHENTICATED_OPERATIONS:
+        logger.debug("ONVIF: %s called %s (no authentication required)", peer, op_name)
+    else:
+        ok, reason = check_security_header(envelope, ctx.settings.stream_username, ctx.settings.stream_password)
+        if not ok:
+            logger.warning("ONVIF: refused %s from %s - %s", op_name, peer, reason)
             raise NotAuthorized()
+        logger.debug("ONVIF: %s called %s, authenticated by %s", peer, op_name, reason)
 
     return soap_envelope(handler(ctx))
 

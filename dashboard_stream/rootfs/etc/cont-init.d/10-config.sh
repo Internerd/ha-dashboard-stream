@@ -113,6 +113,11 @@ cat > "${MEDIAMTX_CONF}" <<EOF
 # Auto-generated at container start - do not edit, edit the app options instead.
 logLevel: warn
 rtspAddress: :${RTSP_PORT}
+# mediamtx offers only Basic by default, but NVRs (UniFi Protect among them)
+# commonly authenticate with Digest and simply report "invalid credentials"
+# when the server does not offer it. Offer both; over plain RTSP neither is
+# more confidential than the other.
+rtspAuthMethods: [basic, digest]
 rtmp: no
 hls: no
 webrtc: no

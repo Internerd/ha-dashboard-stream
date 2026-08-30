@@ -187,6 +187,13 @@ Python app (aiohttp, one process):
 - **UniFi Protect can't discover the camera** - use the manual RTSP entry
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
+- **The NVR says the credentials are invalid** - first check the app log
+  while you retry. An ONVIF attempt now logs exactly what was refused
+  (`ONVIF: refused GetStreamUri from … - password digest does not match
+  stream_password`, a wrong username, a clock more than 300 s off, or an
+  operation this device does not implement). If nothing appears at all, the
+  NVR never reached the app: verify the address it is using (see
+  `advertise_ip`) and that port 8554/8080 are reachable from it.
 - **UniFi Protect finds the camera but cannot pull the stream** - the
   address it was handed is probably on the wrong interface. The app
   advertises the address of the host's default route, which is not

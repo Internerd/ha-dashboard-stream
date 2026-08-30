@@ -45,6 +45,26 @@ if bashio::var.is_empty "${STREAM_USERNAME}"; then
     bashio::exit.nok
 fi
 
+# mediamtx only accepts these characters in its internal credentials
+# (internal/conf/credential.go). Anything else makes it refuse to start, which
+# would leave the app without an RTSP server at all - so say so here, with the
+# allowed set, instead of failing later and out of sight.
+# In a bracket expression "]" has to come first to be literal and "-" last.
+MTX_CREDENTIAL_CHARS='^[]a-zA-Z0-9!$()*+.;<=>[^_{}@#&-]+$'
+if ! [[ "${STREAM_USERNAME}" =~ ${MTX_CREDENTIAL_CHARS} ]]; then
+    bashio::log.fatal "stream_username contains characters the RTSP server cannot use." \
+        "Allowed: letters, digits and ! \$ ( ) * + . ; < = > [ ] ^ _ - { } @ # &" \
+        "(no spaces, colons, slashes or quotes)."
+    bashio::exit.nok
+fi
+if ! [[ "${STREAM_PASSWORD}" =~ ${MTX_CREDENTIAL_CHARS} ]]; then
+    bashio::log.fatal "stream_password contains characters the RTSP server cannot use." \
+        "Allowed: letters, digits and ! \$ ( ) * + . ; < = > [ ] ^ _ - { } @ # &" \
+        "(no spaces, colons, slashes or quotes). Pick a different password - a" \
+        "long alphanumeric one is both safe and accepted by every NVR."
+    bashio::exit.nok
+fi
+
 if ! [[ "${RESOLUTION}" =~ ^[0-9]+x[0-9]+$ ]]; then
     bashio::log.fatal "resolution '${RESOLUTION}' is not in WIDTHxHEIGHT form."
     bashio::exit.nok
@@ -77,31 +97,36 @@ fi
 # Persist resolved settings for the s6 services and the Python app.
 # ---------------------------------------------------------------------------
 umask 077
-cat > "${ENV_FILE}" <<EOF
-export HA_URL="${HA_URL}"
-export HA_TOKEN="${HA_TOKEN}"
-export DASHBOARD_URL="${DASHBOARD_URL}"
-export DASHBOARD_PATH="${TARGET_PATH}"
-export STREAM_WIDTH="${WIDTH}"
-export STREAM_HEIGHT="${HEIGHT}"
-export STREAM_FRAMERATE="${FRAMERATE}"
-export RENDER_WAIT="${RENDER_WAIT}"
-export RELOAD_INTERVAL="${RELOAD_INTERVAL}"
-export RTSP_PORT="${RTSP_PORT}"
-export ONVIF_PORT="${ONVIF_PORT}"
-export ONVIF_ENABLED="${ONVIF_ENABLED}"
-export ONVIF_DEVICE_NAME="${ONVIF_DEVICE_NAME}"
-export ADVERTISE_IP="${ADVERTISE_IP}"
-export STREAM_USERNAME="${STREAM_USERNAME}"
-export STREAM_PASSWORD="${STREAM_PASSWORD}"
-export WATCHDOG_INTERVAL="${WATCHDOG_INTERVAL}"
-export STALL_TIMEOUT="${STALL_TIMEOUT}"
-export LOG_LEVEL="${LOG_LEVEL}"
-export DISPLAY=":99"
-export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/dbus/session_bus_socket"
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN:-}"
-EOF
+# Every value is written with %q so that a password, token or device name
+# containing a quote, $, backtick or space cannot break this file or be
+# re-expanded when a service sources it.
+: > "${ENV_FILE}"
+write_env() {
+    printf 'export %s=%q\n' "$1" "$2" >> "${ENV_FILE}"
+}
+write_env HA_URL "${HA_URL}"
+write_env HA_TOKEN "${HA_TOKEN}"
+write_env DASHBOARD_URL "${DASHBOARD_URL}"
+write_env DASHBOARD_PATH "${TARGET_PATH}"
+write_env STREAM_WIDTH "${WIDTH}"
+write_env STREAM_HEIGHT "${HEIGHT}"
+write_env STREAM_FRAMERATE "${FRAMERATE}"
+write_env RENDER_WAIT "${RENDER_WAIT}"
+write_env RELOAD_INTERVAL "${RELOAD_INTERVAL}"
+write_env RTSP_PORT "${RTSP_PORT}"
+write_env ONVIF_PORT "${ONVIF_PORT}"
+write_env ONVIF_ENABLED "${ONVIF_ENABLED}"
+write_env ONVIF_DEVICE_NAME "${ONVIF_DEVICE_NAME}"
+write_env ADVERTISE_IP "${ADVERTISE_IP}"
+write_env STREAM_USERNAME "${STREAM_USERNAME}"
+write_env STREAM_PASSWORD "${STREAM_PASSWORD}"
+write_env WATCHDOG_INTERVAL "${WATCHDOG_INTERVAL}"
+write_env STALL_TIMEOUT "${STALL_TIMEOUT}"
+write_env LOG_LEVEL "${LOG_LEVEL}"
+write_env DISPLAY ":99"
+write_env DBUS_SYSTEM_BUS_ADDRESS "unix:path=/run/dbus/system_bus_socket"
+write_env DBUS_SESSION_BUS_ADDRESS "unix:path=/run/dbus/session_bus_socket"
+write_env SUPERVISOR_TOKEN "${SUPERVISOR_TOKEN:-}"
 chmod 600 "${ENV_FILE}"
 
 bashio::log.info "Dashboard target: ${DASHBOARD_URL}"
@@ -109,9 +134,24 @@ bashio::log.info "Dashboard target: ${DASHBOARD_URL}"
 # ---------------------------------------------------------------------------
 # Render mediamtx.yml (RTSP server config with per-path Basic Auth).
 # ---------------------------------------------------------------------------
+# mediamtx's own level: at "info" it logs every connection attempt and every
+# failed authentication with the peer address, which is what tells you whether
+# an NVR reached the stream at all. That is worth having by default.
+case "${LOG_LEVEL}" in
+    debug|info) MTX_LOG_LEVEL="info" ;;
+    warning)    MTX_LOG_LEVEL="warn" ;;
+    *)          MTX_LOG_LEVEL="error" ;;
+esac
+
+# Credentials are quoted as JSON (a subset of YAML) so that a password
+# containing #, quotes, @ or * cannot be truncated, re-interpreted or reject
+# the whole config - all of which look like "invalid credentials" to an NVR.
+STREAM_USERNAME_YAML="$(jq -Rn --arg v "${STREAM_USERNAME}" '$v')"
+STREAM_PASSWORD_YAML="$(jq -Rn --arg v "${STREAM_PASSWORD}" '$v')"
+
 cat > "${MEDIAMTX_CONF}" <<EOF
 # Auto-generated at container start - do not edit, edit the app options instead.
-logLevel: warn
+logLevel: ${MTX_LOG_LEVEL}
 rtspAddress: :${RTSP_PORT}
 # mediamtx offers only Basic by default, but NVRs (UniFi Protect among them)
 # commonly authenticate with Digest and simply report "invalid credentials"
@@ -122,14 +162,17 @@ rtmp: no
 hls: no
 webrtc: no
 srt: no
+# New in mediamtx 1.20 and on by default: it would open further host ports
+# (8892/8893) this app has no use for.
+moq: no
 api: no
 metrics: no
 pprof: no
 authInternalUsers:
   # The real stream credentials (configured in the app options): read-only,
   # reachable from the LAN - this is what UniFi Protect / VLC / etc. use.
-  - user: ${STREAM_USERNAME}
-    pass: ${STREAM_PASSWORD}
+  - user: ${STREAM_USERNAME_YAML}
+    pass: ${STREAM_PASSWORD_YAML}
     ips: []
     permissions:
       - action: read

@@ -4,6 +4,36 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] - 2026-08-30
+
+### Fixed
+
+- Stream credentials were pasted unquoted into the generated RTSP server
+  config, so YAML - not the user - decided what the password was. Verified
+  against mediamtx v1.20.0: `Pass #1` authenticated as `Pass`, `"quoted"`
+  lost its quotes, and `@home1`, `*secret` or a purely numeric password made
+  mediamtx refuse to start at all. Every one of those looks like "invalid
+  credentials" to an NVR. Credentials are now written as JSON (a subset of
+  YAML), which round-trips them exactly.
+- The app options were also interpolated unquoted into the environment file
+  every service sources, so a device name containing an apostrophe truncated
+  it and a value containing `$` or backticks was expanded - backticks were
+  executed. Values are now written with `printf %q`.
+- Credentials are validated at startup against the character set the RTSP
+  server actually accepts (letters, digits and `! $ ( ) * + . ; < = > [ ] ^
+  _ - { } @ # &`). A password with a space, colon, slash or quote now stops
+  the app with a message naming the allowed set, instead of leaving the RTSP
+  server dead or authenticating against something else.
+
+### Changed
+
+- The RTSP server's log level follows the app's `log_level`: at `info` it
+  records every connection attempt and every failed authentication with the
+  peer address, which is what shows whether an NVR reached the stream at all.
+- mediamtx 1.20 enables MoQ by default, opening two further host ports this
+  app has no use for; it is now switched off along with RTMP, HLS, WebRTC
+  and SRT.
+
 ## [1.1.1] - 2026-08-30
 
 ### Fixed

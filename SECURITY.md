@@ -63,6 +63,13 @@ network isolation. Two things are done to limit the blast radius of this:
   password on a process command line (visible to anything else able to
   inspect processes in the container), and cannot be used to publish from
   outside the container's own loopback.
+- The ingress dashboard-picker panel has no credentials of its own: it
+  trusts Home Assistant to have authenticated the user before proxying the
+  request. Since host networking prevents it from binding to loopback (the
+  Supervisor would not be able to reach it), it instead refuses every
+  request whose peer address is outside the Supervisor's own Docker
+  network `172.30.32.0/23` (plus loopback), and logs the address of
+  anything it turns away.
 - If you use the optional `ha_long_lived_token` login method, that token
   is only ever sent to (a) your own configured `ha_url` over whatever
   transport that URL uses, and (b) written into the headless browser's

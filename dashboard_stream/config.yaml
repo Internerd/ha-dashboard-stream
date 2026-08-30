@@ -6,7 +6,7 @@
 # whether your Home Assistant refers to it as an "Add-on" or an "App".
 ---
 name: "Dashboard Stream Cam"
-version: "1.0.3"
+version: "1.0.4"
 slug: "dashboard_stream"
 description: >-
   Renders a Home Assistant dashboard headlessly and publishes it as an
@@ -30,9 +30,9 @@ ingress_port: 8099
 panel_icon: mdi:cctv
 panel_title: Dashboard Stream
 # Points at the public ONVIF-port /health endpoint (0.0.0.0-bound), not the
-# ingress panel: the ingress panel is intentionally loopback-only (see
-# SECURITY.md) and [HOST] is not guaranteed to resolve to something that
-# can reach a loopback-bound port from the Supervisor's side.
+# ingress panel: the ingress panel only answers the Supervisor's own Docker
+# network (see SECURITY.md), and [HOST] is not guaranteed to resolve to an
+# address inside it.
 watchdog: "http://[HOST]:[PORT:8080]/health"
 options:
   ha_url: "http://homeassistant.local:8123"

@@ -4,6 +4,24 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] - 2026-08-30
+
+### Fixed
+
+- The ingress panel reported "The app is not ready yet, it may still be
+  starting" and never opened. It was bound to `127.0.0.1`, but with
+  `host_network` the Supervisor's ingress proxy connects to the gateway of
+  its own Docker network (`172.30.32.0/23`), not to the app's loopback, so
+  it could never reach the panel. The panel now listens on all interfaces
+  and refuses any request whose peer is outside that network (or loopback)
+  with `403`, which keeps it off the LAN as before. Refused peers are
+  logged.
+- The Xvfb log filter added in 1.0.3 used `grep --line-buffered`, which
+  BusyBox grep does not support - it printed a usage error on every start
+  instead of filtering. It now uses `awk` with `fflush()`, which this image
+  does have, and which (unlike BusyBox grep piping into a pipe) does not
+  block-buffer a genuine X error out of sight.
+
 ## [1.0.3] - 2026-08-30
 
 ### Fixed

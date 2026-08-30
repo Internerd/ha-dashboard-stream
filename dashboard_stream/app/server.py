@@ -138,9 +138,33 @@ class BrowserSupervisor:
             except browser.BrowserError:
                 logger.warning("Failed to navigate to %s", self.current_url, exc_info=True)
 
+            await asyncio.sleep(s.render_wait)
+            await self._report_page()
             await self._supervise_until_hung()
             logger.error("Chromium appears hung (no CDP response) - forcing restart")
             kill_chromium()
+
+    async def _report_page(self) -> None:
+        """Log what the browser ended up displaying - this is what gets streamed."""
+        try:
+            page = await browser.describe_page(self.session, self.settings.cdp_port)
+        except (browser.BrowserError, asyncio.TimeoutError, ValueError):
+            logger.warning("Could not ask the browser what it is displaying", exc_info=True)
+            return
+        logger.info(
+            "Browser is showing %s (title %r, readyState %s, %s characters of text in %s elements)",
+            page.get("url"),
+            page.get("title"),
+            page.get("state"),
+            page.get("characters"),
+            page.get("elements"),
+        )
+        if not page.get("characters"):
+            logger.warning(
+                "That page has no visible text, so the stream is a blank picture. Check that "
+                "ha_url is reachable from this app, that the dashboard path exists, and that "
+                "the browser is signed in (ha_long_lived_token or Trusted Networks)."
+            )
 
     async def _supervise_until_hung(self) -> None:
         s = self.settings
@@ -204,7 +228,10 @@ async def snapshot_loop(settings: Settings, interval: int = 10) -> None:
 
         if ok != last_ok:
             if ok:
-                logger.info("Snapshot capture is working; /snapshot.jpg is being served")
+                logger.info(
+                    "Snapshot capture is working; /snapshot.jpg is being served (%s bytes)",
+                    os.path.getsize(SNAPSHOT_PATH),
+                )
             else:
                 logger.warning(
                     "Snapshot capture is failing, so /snapshot.jpg answers 503 and NVR "
@@ -469,6 +496,7 @@ async def main() -> None:
         local_ip=local_ip,
         device_uuid=device_uuid,
         snapshot_token=onvif.get_or_create_snapshot_token(),
+        mac_address=onvif.get_mac_address(local_ip, device_uuid),
     )
 
     http_session = aiohttp.ClientSession()

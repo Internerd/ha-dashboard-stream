@@ -6,7 +6,7 @@
 # whether your Home Assistant refers to it as an "Add-on" or an "App".
 ---
 name: "Dashboard Stream Cam"
-version: "1.1.2"
+version: "1.2.0"
 slug: "dashboard_stream"
 description: >-
   Renders a Home Assistant dashboard headlessly and publishes it as an
@@ -45,6 +45,7 @@ options:
   reload_interval: 3600
   rtsp_port: 8554
   onvif_port: 8080
+  onvif_extra_port: 0
   onvif_enabled: true
   onvif_device_name: "Dashboard Stream Cam"
   advertise_ip: ""
@@ -64,6 +65,7 @@ schema:
   reload_interval: "int(0,86400)"
   rtsp_port: "port"
   onvif_port: "port"
+  onvif_extra_port: "int(0,65535)"
   onvif_enabled: "bool"
   onvif_device_name: "str"
   # Empty (auto-detect) or a plain IPv4 address.

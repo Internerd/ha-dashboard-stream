@@ -455,12 +455,45 @@ async def main() -> None:
     await web.TCPSite(public_runner, "0.0.0.0", settings.onvif_port).start()  # noqa: S104 - intentionally LAN-reachable, see SECURITY.md
     logger.info("Public ONVIF/snapshot service on 0.0.0.0:%s", settings.onvif_port)
 
+    # Some NVRs look for ONVIF on the standard HTTP port instead of asking
+    # where it is - UniFi Protect's "Advanced Adoption" takes an address, not
+    # a port. Serving the same app on a second port lets those find it. A port
+    # already used on the host must not take the whole app down with it.
+    if settings.onvif_extra_port:
+        try:
+            await web.TCPSite(public_runner, "0.0.0.0", settings.onvif_extra_port).start()  # noqa: S104 - same service, see SECURITY.md
+        except OSError as err:
+            logger.warning(
+                "Could not also listen on port %s (%s). Something else on this host is "
+                "using it; ONVIF stays reachable on port %s.",
+                settings.onvif_extra_port,
+                err,
+                settings.onvif_port,
+            )
+        else:
+            logger.info(
+                "Also serving ONVIF/snapshot on 0.0.0.0:%s (onvif_extra_port)",
+                settings.onvif_extra_port,
+            )
+
     ingress_runner = web.AppRunner(ingress_app)
     await ingress_runner.setup()
     await web.TCPSite(ingress_runner, "0.0.0.0", settings.ingress_port).start()  # noqa: S104 - guarded by restrict_to_supervisor
     logger.info(
         "Ingress dashboard-picker panel on :%s (Supervisor-proxied only, other peers refused)",
         settings.ingress_port,
+    )
+
+    logger.info(
+        "Listening: RTSP %s:%s | ONVIF/snapshot %s:%s%s | WS-Discovery udp/3702 | "
+        "ingress panel :%s (Supervisor only). Point your NVR at %s.",
+        local_ip,
+        settings.rtsp_port,
+        local_ip,
+        settings.onvif_port,
+        f" and :{settings.onvif_extra_port}" if settings.onvif_extra_port else "",
+        settings.ingress_port,
+        f"rtsp://{local_ip}:{settings.rtsp_port}/stream",
     )
 
     tasks = [

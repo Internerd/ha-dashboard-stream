@@ -6,7 +6,7 @@
 # whether your Home Assistant refers to it as an "Add-on" or an "App".
 ---
 name: "Dashboard Stream Cam"
-version: "1.0.1"
+version: "1.0.2"
 slug: "dashboard_stream"
 description: >-
   Renders a Home Assistant dashboard headlessly and publishes it as an

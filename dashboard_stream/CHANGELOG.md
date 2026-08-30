@@ -4,6 +4,32 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-08-30
+
+### Fixed
+
+- Chromium flooded the app log on every start with
+  `Failed to connect to the bus: Failed to connect to socket
+  /run/dbus/system_bus_socket`,
+  `Failed to connect to the bus: Could not parse server address: Unknown
+  address type` and
+  `Failed to call method: org.freedesktop.DBus.NameHasOwner`. The container
+  now runs its own minimal, container-local D-Bus system and session bus
+  (`dbus` / `dbus-session` services), so those probes get a clean answer
+  instead of failing and retrying. The session bus also removes the
+  `autolaunch:` fallback address Chromium's libdbus cannot parse.
+- Chromium repeatedly logged
+  `Registration response error message: DEPRECATED_ENDPOINT` from Google
+  Cloud Messaging. Background networking, sync, component updates,
+  domain reliability, crash reporting and the secret-service password
+  store are now disabled - none of them are used by a kiosk renderer.
+
+### Changed
+
+- Chromium's own stderr logging is limited to fatal errors
+  (`--log-level=3`) unless the app's `log_level` option is set to `debug`,
+  so residual browser-internal chatter cannot drown out the app's log.
+
 ## [1.0.1] - 2026-08-16
 
 ### Fixed

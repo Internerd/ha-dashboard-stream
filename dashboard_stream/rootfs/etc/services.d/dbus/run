@@ -1,0 +1,9 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+set -e
+
+bashio::log.info "Starting D-Bus system bus"
+exec dbus-daemon \
+    --config-file=/etc/dbus-1/kiosk-system.conf \
+    --nofork \
+    --nopidfile

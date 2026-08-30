@@ -12,6 +12,14 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
+# Chromium probes both buses on startup. Starting it before they are up just
+# reproduces the connection errors the buses exist to prevent.
+bashio::log.info "Waiting for D-Bus..."
+for _ in $(seq 1 30); do
+    [ -S /run/dbus/system_bus_socket ] && [ -S /run/dbus/session_bus_socket ] && break
+    sleep 1
+done
+
 bashio::log.info "Waiting for Home Assistant at ${HA_URL} ..."
 for _ in $(seq 1 90); do
     if curl -sf -o /dev/null --max-time 3 "${HA_URL%/}/manifest.json"; then
@@ -19,6 +27,15 @@ for _ in $(seq 1 90); do
     fi
     sleep 2
 done
+
+# Chromium log levels: 0=INFO 1=WARNING 2=ERROR 3=FATAL. Anything below FATAL
+# is third-party chatter from subsystems this kiosk does not use, so only
+# surface it when the app itself is set to debug.
+if [ "${LOG_LEVEL}" = "debug" ]; then
+    CHROMIUM_LOG_ARGS=(--enable-logging=stderr --log-level=0)
+else
+    CHROMIUM_LOG_ARGS=(--log-level=3)
+fi
 
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || echo /usr/bin/chromium)"
 bashio::log.info "Starting Chromium kiosk (binary: ${CHROMIUM_BIN}) -> ${DASHBOARD_URL}"
@@ -45,4 +62,15 @@ exec "${CHROMIUM_BIN}" \
     --noerrdialogs \
     --check-for-update-interval=31536000 \
     --overscroll-history-navigation=0 \
-    --start-fullscreen
+    --start-fullscreen \
+    --no-first-run \
+    --no-default-browser-check \
+    --password-store=basic \
+    --disable-background-networking \
+    --disable-component-update \
+    --disable-client-side-phishing-detection \
+    --disable-domain-reliability \
+    --disable-sync \
+    --disable-breakpad \
+    --metrics-recording-only \
+    "${CHROMIUM_LOG_ARGS[@]}"

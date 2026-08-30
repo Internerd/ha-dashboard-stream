@@ -1,0 +1,5 @@
+#!/command/with-contenv bashio
+# shellcheck shell=bash
+bashio::log.warning "D-Bus session bus exited (code ${1:-?}), s6 will restart it."
+rm -f /run/dbus/session_bus_socket
+sleep 1

@@ -4,6 +4,20 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.5] - 2026-08-30
+
+### Fixed
+
+- The panel's dashboard dropdown only ever offered the default dashboard and
+  the one configured in the app options, never the instance's actual
+  dashboards. It queried `GET /core/api/lovelace/dashboards`, which does not
+  exist - Home Assistant has no REST endpoint for this, its own frontend uses
+  the WebSocket command `lovelace/dashboards/list`. The app now uses that
+  command too, over the Supervisor's WebSocket proxy, falling back to
+  `ha_url` with `ha_long_lived_token` if the Supervisor is not reachable.
+  Because this app uses host networking (where the `supervisor` hostname may
+  not resolve), the Supervisor's fixed address is tried as well as its name.
+
 ## [1.0.4] - 2026-08-30
 
 ### Fixed

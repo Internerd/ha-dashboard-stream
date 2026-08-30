@@ -22,7 +22,8 @@ camera.
   auth) for NVR thumbnails.
 - A web panel (open the app and click **Open Web UI** / the sidebar panel)
   with a **live dropdown of your real Home Assistant dashboards** to pick
-  which one is streamed - no need to hand-type a URL.
+  which one is streamed - no need to hand-type a URL. The list is read over
+  Home Assistant's WebSocket API, the same way its own frontend lists them.
 - Three layers of self-healing: s6 process supervision (instant restart of
   any crashed component), an internal watchdog that force-restarts a
   browser that's alive but stuck rendering, and a Supervisor-level

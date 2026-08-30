@@ -52,6 +52,18 @@ INGRESS_ALLOWED_NETWORKS = (
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("::1/128"),
 )
+# Home Assistant has no REST endpoint that lists dashboards - its own frontend
+# asks over the WebSocket API, so this app does too. The Supervisor proxies
+# Core's WebSocket API; "supervisor" resolves for apps on the Supervisor's
+# Docker network, but this app uses host networking, where that name may not
+# resolve, so the Supervisor's fixed address is tried as well. If neither
+# works (e.g. the app runs against a Home Assistant that is not managed by
+# this Supervisor), the configured ha_url and long-lived token are used.
+SUPERVISOR_WS_URLS = (
+    "http://supervisor/core/websocket",
+    "http://172.30.32.2/core/websocket",
+)
+
 SNAPSHOT_PATH = "/data/snapshot.jpg"
 INDEX_HTML = (Path(__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
 
@@ -222,26 +234,75 @@ async def handle_index(_request: web.Request) -> web.Response:
     return web.Response(text=INDEX_HTML, content_type="text/html")
 
 
+async def ws_list_dashboards(session: aiohttp.ClientSession, url: str, token: str) -> list[dict]:
+    """Run the `lovelace/dashboards/list` command against one WebSocket API.
+
+    Both the Supervisor proxy and Home Assistant itself speak the same
+    handshake: the server offers `auth_required`, the client answers with an
+    `auth` message carrying a token, and the server confirms with `auth_ok`.
+    """
+    async with session.ws_connect(url, timeout=aiohttp.ClientTimeout(total=10)) as ws:
+        hello = await ws.receive_json(timeout=5)
+        if hello.get("type") != "auth_required":
+            raise RuntimeError(f"unexpected greeting {hello.get('type')!r}")
+
+        await ws.send_json({"type": "auth", "access_token": token})
+        auth = await ws.receive_json(timeout=5)
+        if auth.get("type") != "auth_ok":
+            raise RuntimeError(f"authentication rejected ({auth.get('type')}: {auth.get('message')})")
+
+        await ws.send_json({"id": 1, "type": "lovelace/dashboards/list"})
+        while True:
+            message = await ws.receive_json(timeout=10)
+            if message.get("id") != 1 or message.get("type") != "result":
+                continue  # unrelated event on the same connection
+            if not message.get("success"):
+                raise RuntimeError(f"command failed: {message.get('error')}")
+            return message.get("result") or []
+
+
+async def fetch_dashboards(session: aiohttp.ClientSession, settings: Settings) -> list[dict]:
+    """Ask Home Assistant for its dashboards, trying each reachable route."""
+    routes: list[tuple[str, str]] = []
+    if settings.supervisor_token:
+        routes += [(url, settings.supervisor_token) for url in SUPERVISOR_WS_URLS]
+    if settings.ha_token:
+        routes.append((f"{settings.ha_url}/api/websocket", settings.ha_token))
+
+    if not routes:
+        logger.warning(
+            "No way to list dashboards: neither a Supervisor token nor "
+            "ha_long_lived_token is available. Set ha_long_lived_token to get "
+            "the full dashboard list in the panel."
+        )
+        return []
+
+    for url, token in routes:
+        try:
+            result = await ws_list_dashboards(session, url, token)
+        except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError, TypeError) as err:
+            logger.debug("Dashboard list via %s failed: %s", url, err)
+            continue
+        logger.debug("Listed %s dashboards via %s", len(result), url)
+        return result
+
+    logger.warning(
+        "Could not list dashboards over any route (%s). The panel falls back to "
+        "the default and the configured dashboard; run with log_level debug to "
+        "see why each attempt failed.",
+        ", ".join(url for url, _ in routes),
+    )
+    return []
+
+
 async def handle_dashboards(request: web.Request) -> web.Response:
     settings: Settings = request.app["settings"]
     session: aiohttp.ClientSession = request.app["http_session"]
     dashboards = [{"path": "", "title": "Default dashboard (Overview)"}]
-    if settings.supervisor_token:
-        try:
-            async with session.get(
-                "http://supervisor/core/api/lovelace/dashboards",
-                headers={"Authorization": f"Bearer {settings.supervisor_token}"},
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                if resp.status == 200:
-                    for item in await resp.json():
-                        url_path = item.get("url_path")
-                        if url_path:
-                            dashboards.append({"path": url_path, "title": item.get("title") or url_path})
-                else:
-                    logger.warning("Home Assistant API returned HTTP %s for dashboard list", resp.status)
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            logger.warning("Could not reach Home Assistant to list dashboards", exc_info=True)
+    for item in await fetch_dashboards(session, settings):
+        url_path = item.get("url_path")
+        if url_path:
+            dashboards.append({"path": url_path, "title": item.get("title") or url_path})
 
     configured = settings.dashboard_path.strip()
     if configured and not any(d["path"] == configured for d in dashboards):

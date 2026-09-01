@@ -209,7 +209,9 @@ Python app (aiohttp, one process):
 - **UniFi Protect can't discover the camera** - use the manual RTSP entry
   method instead; WS-Discovery multicast is frequently blocked between
   VLANs.
-- **Is the browser actually rendering anything?** Every start logs what the
+- **Is the browser actually rendering anything?** (the check walks Home
+  Assistant's shadow DOM, so a rendered dashboard reports thousands of
+  characters across many shadow roots) Every start logs what the
   kiosk ended up displaying: `Browser is showing <url> (title …, readyState
   complete, N characters of text in M elements)`. `0 characters` means the
   page is blank and the stream is a blank picture - check `ha_url`, the

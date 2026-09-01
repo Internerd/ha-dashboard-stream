@@ -13,6 +13,11 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
+# -pkt_size 1400: ffmpeg's default RTP payload is larger than what the RTSP
+# server accepts ("RTP packets are too big (1460 > 1440), remuxing them into
+# smaller ones"), so it repacketises every frame. 1400 keeps the packets under
+# that limit and comfortably inside a 1500-byte MTU on the way to the NVR.
+#
 # -profile:v main: this is what the ONVIF service advertises as the stream's
 # H.264 profile; libx264 would otherwise default to High and NVRs are entitled
 # to expect the stream to match what the description claims.
@@ -27,5 +32,5 @@ exec ffmpeg -hide_banner -loglevel warning -nostdin \
     -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
     -profile:v main \
     -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
-    -f rtsp -rtsp_transport tcp \
+    -f rtsp -rtsp_transport tcp -pkt_size 1400 \
     "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/stream"

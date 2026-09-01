@@ -108,17 +108,31 @@ async def reload_page(session: aiohttp.ClientSession, cdp_port: int, ignore_cach
 async def describe_page(session: aiohttp.ClientSession, cdp_port: int, timeout: float = 10) -> dict:
     """What the kiosk is actually showing - the stream is a picture of this.
 
-    A blank page produces a uniform image that looks like a broken stream on
-    an NVR, so it is worth stating in the log rather than leaving to guesswork.
+    The walk descends into shadow roots: Home Assistant's frontend is built
+    from web components, so a fully rendered dashboard has an empty
+    document.body.innerText and looks blank to anything that only reads the
+    light DOM. Script and style text is skipped so it cannot pass for content.
     """
     expression = (
-        "JSON.stringify({"
-        "url: location.href,"
-        "title: document.title,"
-        "state: document.readyState,"
-        "characters: document.body ? document.body.innerText.trim().length : 0,"
-        "elements: document.body ? document.body.getElementsByTagName('*').length : 0"
-        "})"
+        "JSON.stringify((() => {"
+        "let characters = 0, elements = 0, roots = 0;"
+        "const skip = {SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1};"
+        "const visit = (root) => {"
+        "  roots++;"
+        "  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);"
+        "  while (walker.nextNode()) {"
+        "    const parent = walker.currentNode.parentElement;"
+        "    if (!parent || !skip[parent.tagName]) characters += walker.currentNode.data.trim().length;"
+        "  }"
+        "  root.querySelectorAll('*').forEach((el) => {"
+        "    elements++;"
+        "    if (el.shadowRoot) visit(el.shadowRoot);"
+        "  });"
+        "};"
+        "if (document.body) visit(document.body);"
+        "return {url: location.href, title: document.title, state: document.readyState,"
+        " characters, elements, roots};"
+        "})())"
     )
     result = await cdp_call(
         session, cdp_port, "Runtime.evaluate", {"expression": expression, "returnByValue": True}, timeout=timeout

@@ -4,6 +4,22 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-09-01
+
+### Fixed
+
+- The "page has no visible text, so the stream is a blank picture" warning
+  added in 1.4.0 fired on perfectly rendered dashboards. It measured
+  `document.body.innerText`, which is empty for Home Assistant's frontend
+  because the whole UI lives in shadow roots. The check now walks the shadow
+  trees (skipping script and style text) and reports how many roots it saw,
+  and only warns when the page has neither text nor elements.
+- The capture published RTP packets larger than the RTSP server accepts, so
+  every frame was repacketised: `RTP packets are too big (1460 > 1440),
+  remuxing them into smaller ones`. Reproduced against mediamtx v1.20.0 and
+  fixed with `-pkt_size 1400`, which also keeps the packets inside a normal
+  1500-byte MTU on the way to an NVR.
+
 ## [1.4.0] - 2026-08-30
 
 ### Added

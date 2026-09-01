@@ -224,21 +224,25 @@ Python app (aiohttp, one process):
   responses aiohttp logs the header size, not the image: a perfectly
   healthy 12 kB JPEG appears as `"GET /snapshot.jpg…" 200 240`. The
   `Snapshot capture is working … (N bytes)` line reports the real size.
-- **The NVR adopts the camera but the live feed will not load** - since
-  1.6.0 the device reports the transports it supports (`RTP_TCP`,
-  `RTP_RTSP_TCP`) and offers the ONVIF event service that NVRs subscribe to
-  while setting a camera up; both were missing before, and an NVR that
-  cannot see how to fetch the stream, or cannot subscribe to events, may
-  simply refuse to show it. - one cause
-  worth ruling out first is malformed ONVIF: an NVR's ONVIF client is
-  usually generated from the WSDL and simply discards a response that
-  violates the schema, without saying so. `tools/check_onvif_schema.py`
-  validates every response of this app against the official ONVIF schema. - if the log
+- **The NVR adopts the camera but the live feed will not load.** If the log
   shows the RTSP session being read and snapshots answered with 200, the
   device side is doing its job and the client is refusing the stream itself.
-  The usual reason is the missing audio track; leave `audio_track` at
-  `silent`. VLC (`vlc --rtsp-tcp rtsp://user:pass@host:port/stream`) is the
-  quickest way to confirm the stream itself is fine.
+  Work through it in this order:
+  1. Confirm the stream is fine at all:
+     `vlc --rtsp-tcp rtsp://user:pass@host:port/stream`. If VLC plays it,
+     nothing about the video or the credentials is the problem.
+  2. Rule out malformed ONVIF. An NVR's ONVIF client is usually generated
+     from the WSDL and silently discards a response that violates the
+     schema. `tools/check_onvif_schema.py` validates every response of this
+     app against the official ONVIF schema.
+  3. If you have a second device the same NVR *does* accept,
+     `tools/compare_onvif.py` asks both the same questions and prints where
+     the answers differ. That beats reasoning about what the NVR might want.
+  Since 1.6.0 the device also reports the transports it supports (`RTP_TCP`,
+  `RTP_RTSP_TCP`) and offers the ONVIF event service NVRs subscribe to while
+  setting a camera up; both were missing before, and an NVR that cannot see
+  how to fetch the stream, or cannot subscribe to events, may refuse to show
+  it.
 - **The NVR adopted the camera but shows no picture** - check the log for
   `GET /snapshot.jpg ... 401` and for an ONVIF operation logged as not
   implemented. Both were what stopped UniFi Protect before 1.3.0: it asked

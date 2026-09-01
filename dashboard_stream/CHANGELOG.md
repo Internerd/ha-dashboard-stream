@@ -4,6 +4,27 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] - 2026-09-01
+
+### Fixed
+
+- The ONVIF profile violated the ONVIF schema: `VideoEncoderConfiguration`
+  and `AudioEncoderConfiguration` both declare `Multicast` as a mandatory
+  element and neither carried one. A client generated from the WSDL - which
+  is what an NVR's ONVIF stack usually is - cannot deserialise such a
+  profile, so it ends up with no usable stream configuration while a plain
+  RTSP player is perfectly happy with the same stream. Both now carry a
+  disabled multicast configuration (0.0.0.0, port 0, AutoStart false) at the
+  position the schema's element sequence puts it.
+
+### Added
+
+- `tools/check_onvif_schema.py`: validates every ONVIF response against the
+  official ONVIF schema - mandatory elements and element order, recursively,
+  in both audio modes - and exits non-zero on a finding. It reports the
+  Multicast defect above when the fix is reverted, so the check is not
+  vacuous. Run it after touching `onvif.py`.
+
 ## [1.5.0] - 2026-09-01
 
 ### Added

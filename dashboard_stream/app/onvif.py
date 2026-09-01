@@ -385,6 +385,23 @@ def _get_network_protocols(ctx: OnvifContext) -> str:
     </tds:GetNetworkProtocolsResponse>"""
 
 
+# The ONVIF schema makes Multicast mandatory in every encoder configuration,
+# even for a device that does not do multicast at all. Leaving it out produces
+# XML that a strict client generated from the WSDL cannot deserialise - the
+# camera then has no usable stream configuration, which is what an NVR reports
+# as "cannot load live feed". Disabled multicast is expressed as address
+# 0.0.0.0, port 0, AutoStart false.
+_MULTICAST_OFF = """      <tt:Multicast>
+        <tt:Address>
+          <tt:Type>IPv4</tt:Type>
+          <tt:IPv4Address>0.0.0.0</tt:IPv4Address>
+        </tt:Address>
+        <tt:Port>0</tt:Port>
+        <tt:TTL>1</tt:TTL>
+        <tt:AutoStart>false</tt:AutoStart>
+      </tt:Multicast>"""
+
+
 def _video_source_config_body(ctx: OnvifContext) -> str:
     s = ctx.settings
     return f"""      <tt:Name>VideoSourceConfig</tt:Name>
@@ -406,6 +423,7 @@ def _video_encoder_config_body(ctx: OnvifContext) -> str:
         <tt:BitrateLimit>2500</tt:BitrateLimit>
       </tt:RateControl>
       <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>Main</tt:H264Profile></tt:H264>
+{_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
 
@@ -421,11 +439,12 @@ def _audio_source_config_body(_ctx: OnvifContext) -> str:
 
 def _audio_encoder_config_body(_ctx: OnvifContext) -> str:
     """Matches the silent AAC track the capture publishes."""
-    return """      <tt:Name>AudioEncoderConfig</tt:Name>
+    return f"""      <tt:Name>AudioEncoderConfig</tt:Name>
       <tt:UseCount>1</tt:UseCount>
       <tt:Encoding>AAC</tt:Encoding>
       <tt:Bitrate>16</tt:Bitrate>
       <tt:SampleRate>16</tt:SampleRate>
+{_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
 

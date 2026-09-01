@@ -223,7 +223,11 @@ Python app (aiohttp, one process):
   responses aiohttp logs the header size, not the image: a perfectly
   healthy 12 kB JPEG appears as `"GET /snapshot.jpg…" 200 240`. The
   `Snapshot capture is working … (N bytes)` line reports the real size.
-- **The NVR adopts the camera but the live feed will not load** - if the log
+- **The NVR adopts the camera but the live feed will not load** - one cause
+  worth ruling out first is malformed ONVIF: an NVR's ONVIF client is
+  usually generated from the WSDL and simply discards a response that
+  violates the schema, without saying so. `tools/check_onvif_schema.py`
+  validates every response of this app against the official ONVIF schema. - if the log
   shows the RTSP session being read and snapshots answered with 200, the
   device side is doing its job and the client is refusing the stream itself.
   The usual reason is the missing audio track; leave `audio_track` at

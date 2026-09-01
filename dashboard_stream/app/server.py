@@ -152,14 +152,16 @@ class BrowserSupervisor:
             logger.warning("Could not ask the browser what it is displaying", exc_info=True)
             return
         logger.info(
-            "Browser is showing %s (title %r, readyState %s, %s characters of text in %s elements)",
+            "Browser is showing %s (title %r, readyState %s, %s characters of text in %s elements "
+            "across %s shadow roots)",
             page.get("url"),
             page.get("title"),
             page.get("state"),
             page.get("characters"),
             page.get("elements"),
+            page.get("roots"),
         )
-        if not page.get("characters"):
+        if not page.get("characters") and not page.get("elements"):
             logger.warning(
                 "That page has no visible text, so the stream is a blank picture. Check that "
                 "ha_url is reachable from this app, that the dashboard path exists, and that "

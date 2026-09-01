@@ -25,7 +25,7 @@ import socket
 import struct
 import uuid
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
@@ -43,6 +43,11 @@ TT_NS = "http://www.onvif.org/ver10/schema"
 WSD_NS = "http://schemas.xmlsoap.org/ws/2005/04/discovery"
 WSA_NS = "http://schemas.xmlsoap.org/ws/2004/08/addressing"
 DN_NS = "http://www.onvif.org/ver10/network/wsdl"
+TEV_NS = "http://www.onvif.org/ver10/events/wsdl"
+WSNT_NS = "http://docs.oasis-open.org/wsn/b-2"
+WSTOP_NS = "http://docs.oasis-open.org/wsn/t-1"
+WSA5_NS = "http://www.w3.org/2005/08/addressing"
+TNS1_NS = "http://www.onvif.org/ver10/topics"
 
 MULTICAST_ADDR = "239.255.255.250"
 MULTICAST_PORT = 3702
@@ -145,6 +150,8 @@ class OnvifContext:
     device_uuid: str
     snapshot_token: str = ""
     mac_address: str = "00:00:00:00:00:00"
+    # Active event subscriptions: id -> (created, pulls_served)
+    subscriptions: dict = field(default_factory=dict)
 
 
 class OnvifError(Exception):
@@ -240,7 +247,9 @@ def soap_envelope(body_inner: str) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<s:Envelope xmlns:s="{SOAP_NS}" xmlns:tds="{TDS_NS}" xmlns:trt="{TRT_NS}" '
-        f'xmlns:tt="{TT_NS}">\n  <s:Body>\n{body_inner}\n  </s:Body>\n</s:Envelope>'
+        f'xmlns:tt="{TT_NS}" xmlns:tev="{TEV_NS}" xmlns:wsnt="{WSNT_NS}" '
+        f'xmlns:wstop="{WSTOP_NS}" xmlns:wsa="{WSA5_NS}" xmlns:tns1="{TNS1_NS}">'
+        f'\n  <s:Body>\n{body_inner}\n  </s:Body>\n</s:Envelope>'
     )
 
 
@@ -260,7 +269,7 @@ def soap_fault(err: OnvifError) -> str:
 # Device / Media operation handlers
 # ---------------------------------------------------------------------------
 
-def _get_system_date_and_time(_ctx: OnvifContext) -> str:
+def _get_system_date_and_time(_ctx: OnvifContext, _request: ET.Element) -> str:
     now = datetime.datetime.now(datetime.timezone.utc)
     return f"""    <tds:GetSystemDateAndTimeResponse>
       <tds:SystemDateAndTime>
@@ -274,18 +283,75 @@ def _get_system_date_and_time(_ctx: OnvifContext) -> str:
     </tds:GetSystemDateAndTimeResponse>"""
 
 
-def _get_capabilities(ctx: OnvifContext) -> str:
-    device_xaddr = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/onvif/device_service"
-    media_xaddr = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/onvif/media_service"
+def _service_xaddr(ctx: OnvifContext, service: str) -> str:
+    return f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/onvif/{service}"
+
+
+def _get_capabilities(ctx: OnvifContext, _request: ET.Element) -> str:
+    """Describe the device the way a real camera does.
+
+    StreamingCapabilities is the part that matters most: it is where a client
+    learns that this camera can deliver RTP over RTSP over TCP. Announcing only
+    an XAddr, as this did before, leaves an NVR to guess the transport.
+    """
     return f"""    <tds:GetCapabilitiesResponse>
       <tds:Capabilities>
-        <tt:Device><tt:XAddr>{device_xaddr}</tt:XAddr></tt:Device>
-        <tt:Media><tt:XAddr>{media_xaddr}</tt:XAddr></tt:Media>
+        <tt:Device>
+          <tt:XAddr>{_service_xaddr(ctx, "device_service")}</tt:XAddr>
+          <tt:Network>
+            <tt:IPFilter>false</tt:IPFilter>
+            <tt:ZeroConfiguration>false</tt:ZeroConfiguration>
+            <tt:IPVersion6>false</tt:IPVersion6>
+            <tt:DynDNS>false</tt:DynDNS>
+          </tt:Network>
+          <tt:System>
+            <tt:DiscoveryResolve>false</tt:DiscoveryResolve>
+            <tt:DiscoveryBye>false</tt:DiscoveryBye>
+            <tt:RemoteDiscovery>false</tt:RemoteDiscovery>
+            <tt:SystemBackup>false</tt:SystemBackup>
+            <tt:SystemLogging>false</tt:SystemLogging>
+            <tt:FirmwareUpgrade>false</tt:FirmwareUpgrade>
+            <tt:SupportedVersions><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tt:SupportedVersions>
+          </tt:System>
+          <tt:IO>
+            <tt:InputConnectors>0</tt:InputConnectors>
+            <tt:RelayOutputs>0</tt:RelayOutputs>
+          </tt:IO>
+          <tt:Security>
+            <tt:TLS1.1>false</tt:TLS1.1>
+            <tt:TLS1.2>false</tt:TLS1.2>
+            <tt:OnboardKeyGeneration>false</tt:OnboardKeyGeneration>
+            <tt:AccessPolicyConfig>false</tt:AccessPolicyConfig>
+            <tt:X.509Token>false</tt:X.509Token>
+            <tt:SAMLToken>false</tt:SAMLToken>
+            <tt:KerberosToken>false</tt:KerberosToken>
+            <tt:RELToken>false</tt:RELToken>
+          </tt:Security>
+        </tt:Device>
+        <tt:Events>
+          <tt:XAddr>{_service_xaddr(ctx, "events_service")}</tt:XAddr>
+          <tt:WSSubscriptionPolicySupport>false</tt:WSSubscriptionPolicySupport>
+          <tt:WSPullPointSupport>true</tt:WSPullPointSupport>
+          <tt:WSPausableSubscriptionManagerInterfaceSupport>false</tt:WSPausableSubscriptionManagerInterfaceSupport>
+        </tt:Events>
+        <tt:Media>
+          <tt:XAddr>{_service_xaddr(ctx, "media_service")}</tt:XAddr>
+          <tt:StreamingCapabilities>
+            <tt:RTPMulticast>false</tt:RTPMulticast>
+            <tt:RTP_TCP>true</tt:RTP_TCP>
+            <tt:RTP_RTSP_TCP>true</tt:RTP_RTSP_TCP>
+          </tt:StreamingCapabilities>
+          <tt:Extension>
+            <tt:ProfileCapabilities>
+              <tt:MaximumNumberOfProfiles>1</tt:MaximumNumberOfProfiles>
+            </tt:ProfileCapabilities>
+          </tt:Extension>
+        </tt:Media>
       </tds:Capabilities>
     </tds:GetCapabilitiesResponse>"""
 
 
-def _get_device_information(ctx: OnvifContext) -> str:
+def _get_device_information(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <tds:GetDeviceInformationResponse>
       <tds:Manufacturer>Dashboard Stream Cam</tds:Manufacturer>
       <tds:Model>{escape(ctx.settings.onvif_device_name)}</tds:Model>
@@ -295,7 +361,7 @@ def _get_device_information(ctx: OnvifContext) -> str:
     </tds:GetDeviceInformationResponse>"""
 
 
-def _get_scopes(ctx: OnvifContext) -> str:
+def _get_scopes(ctx: OnvifContext, _request: ET.Element) -> str:
     scopes = [
         ("Fixed", "onvif://www.onvif.org/type/video_encoder"),
         ("Fixed", "onvif://www.onvif.org/Profile/Streaming"),
@@ -309,7 +375,7 @@ def _get_scopes(ctx: OnvifContext) -> str:
     return f"    <tds:GetScopesResponse>\n{items}\n    </tds:GetScopesResponse>"
 
 
-def _get_services(ctx: OnvifContext) -> str:
+def _get_services(ctx: OnvifContext, _request: ET.Element) -> str:
     device_xaddr = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/onvif/device_service"
     media_xaddr = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/onvif/media_service"
     return f"""    <tds:GetServicesResponse>
@@ -323,10 +389,15 @@ def _get_services(ctx: OnvifContext) -> str:
         <tds:XAddr>{media_xaddr}</tds:XAddr>
         <tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
       </tds:Service>
+      <tds:Service>
+        <tds:Namespace>{TEV_NS}</tds:Namespace>
+        <tds:XAddr>{_service_xaddr(ctx, "events_service")}</tds:XAddr>
+        <tds:Version><tt:Major>2</tt:Major><tt:Minor>5</tt:Minor></tds:Version>
+      </tds:Service>
     </tds:GetServicesResponse>"""
 
 
-def _get_video_sources(ctx: OnvifContext) -> str:
+def _get_video_sources(ctx: OnvifContext, _request: ET.Element) -> str:
     s = ctx.settings
     return f"""    <trt:GetVideoSourcesResponse>
       <trt:VideoSources token="vs_1">
@@ -336,7 +407,152 @@ def _get_video_sources(ctx: OnvifContext) -> str:
     </trt:GetVideoSourcesResponse>"""
 
 
-def _get_network_interfaces(ctx: OnvifContext) -> str:
+# ---------------------------------------------------------------------------
+# Event service (WS-BaseNotification pull point)
+#
+# This device has nothing to report - a dashboard does not move - but an NVR
+# expects a camera to offer the event service and subscribes to it while
+# setting the camera up. Both reference implementations for getting an RTSP
+# source into UniFi Protect (Happytime's server and rtsp-to-onvif) implement
+# it, so this one does too: a subscription that is accepted, renewed and
+# unsubscribed properly, and that reports the motion alarm as permanently
+# false rather than pretending motion it cannot detect.
+# ---------------------------------------------------------------------------
+
+EVENT_TOPIC = "tns1:VideoSource/MotionAlarm"
+
+
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _xs_datetime(value: datetime.datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _subscription_address(ctx: OnvifContext, subscription_id: str) -> str:
+    return f"{_service_xaddr(ctx, 'events_service')}?sub={subscription_id}"
+
+
+def _create_pull_point_subscription(ctx: OnvifContext, _request: ET.Element) -> str:
+    subscription_id = uuid.uuid4().hex[:16]
+    now = _utc_now()
+    ctx.subscriptions[subscription_id] = {"created": now, "pulls": 0}
+    logger.debug("ONVIF: created event subscription %s", subscription_id)
+    return f"""    <tev:CreatePullPointSubscriptionResponse>
+      <tev:SubscriptionReference>
+        <wsa:Address>{escape(_subscription_address(ctx, subscription_id))}</wsa:Address>
+      </tev:SubscriptionReference>
+      <wsnt:CurrentTime>{_xs_datetime(now)}</wsnt:CurrentTime>
+      <wsnt:TerminationTime>{_xs_datetime(now + datetime.timedelta(minutes=10))}</wsnt:TerminationTime>
+    </tev:CreatePullPointSubscriptionResponse>"""
+
+
+def _pull_messages(ctx: OnvifContext, _request: ET.Element) -> str:
+    """Answer a pull with the current (always false) motion state.
+
+    A property event carries its initial state on the first pull, which is what
+    tells a client the topic exists at all; later pulls simply report the same
+    unchanged state.
+    """
+    now = _utc_now()
+    subscription = next(iter(ctx.subscriptions.values()), None)
+    first_pull = True
+    if subscription is not None:
+        first_pull = subscription["pulls"] == 0
+        subscription["pulls"] += 1
+    message = f"""
+      <wsnt:NotificationMessage>
+        <wsnt:Topic Dialect="http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet">{EVENT_TOPIC}</wsnt:Topic>
+        <wsnt:Message>
+          <tt:Message UtcTime="{_xs_datetime(now)}" PropertyOperation="{'Initialized' if first_pull else 'Changed'}">
+            <tt:Source>
+              <tt:SimpleItem Name="VideoSourceConfigurationToken" Value="vsc_1"/>
+            </tt:Source>
+            <tt:Data>
+              <tt:SimpleItem Name="State" Value="false"/>
+            </tt:Data>
+          </tt:Message>
+        </wsnt:Message>
+      </wsnt:NotificationMessage>"""
+    return f"""    <tev:PullMessagesResponse>
+      <tev:CurrentTime>{_xs_datetime(now)}</tev:CurrentTime>
+      <tev:TerminationTime>{_xs_datetime(now + datetime.timedelta(minutes=10))}</tev:TerminationTime>{message if first_pull else ""}
+    </tev:PullMessagesResponse>"""
+
+
+def _renew(ctx: OnvifContext, _request: ET.Element) -> str:
+    now = _utc_now()
+    return f"""    <wsnt:RenewResponse>
+      <wsnt:CurrentTime>{_xs_datetime(now)}</wsnt:CurrentTime>
+      <wsnt:TerminationTime>{_xs_datetime(now + datetime.timedelta(minutes=10))}</wsnt:TerminationTime>
+    </wsnt:RenewResponse>"""
+
+
+def _unsubscribe(ctx: OnvifContext, _request: ET.Element) -> str:
+    ctx.subscriptions.clear()
+    logger.debug("ONVIF: event subscriptions released")
+    return "    <wsnt:UnsubscribeResponse/>"
+
+
+def _get_event_properties(_ctx: OnvifContext, _request: ET.Element) -> str:
+    return f"""    <tev:GetEventPropertiesResponse>
+      <tev:TopicNamespaceLocation>http://www.onvif.org/onvif/ver10/topics/topicns.xml</tev:TopicNamespaceLocation>
+      <wsnt:FixedTopicSet>true</wsnt:FixedTopicSet>
+      <wstop:TopicSet>
+        <tns1:VideoSource>
+          <MotionAlarm wstop:topic="true">
+            <tt:MessageDescription IsProperty="true">
+              <tt:Source>
+                <tt:SimpleItemDescription Name="VideoSourceConfigurationToken" Type="tt:ReferenceToken"/>
+              </tt:Source>
+              <tt:Data>
+                <tt:SimpleItemDescription Name="State" Type="xs:boolean"/>
+              </tt:Data>
+            </tt:MessageDescription>
+          </MotionAlarm>
+        </tns1:VideoSource>
+      </wstop:TopicSet>
+      <wsnt:TopicExpressionDialect>http://www.onvif.org/ver10/tev/topicExpression/ConcreteSet</wsnt:TopicExpressionDialect>
+      <tev:MessageContentFilterDialect>http://www.onvif.org/ver10/tev/messageContentFilter/ItemFilter</tev:MessageContentFilterDialect>
+      <tev:MessageContentSchemaLocation>http://www.onvif.org/onvif/ver10/schema/onvif.xsd</tev:MessageContentSchemaLocation>
+    </tev:GetEventPropertiesResponse>"""
+
+
+def _get_device_service_capabilities(_ctx: OnvifContext, _request: ET.Element) -> str:
+    return """    <tds:GetServiceCapabilitiesResponse>
+      <tds:Capabilities>
+        <tds:Network IPFilter="false" ZeroConfiguration="false" IPVersion6="false" DynDNS="false"/>
+        <tds:Security TLS1.0="false" TLS1.1="false" TLS1.2="false" OnboardKeyGeneration="false"
+          AccessPolicyConfig="false" DefaultAccessPolicy="false" Dot1X="false" RemoteUserHandling="false"
+          X.509Token="false" SAMLToken="false" KerberosToken="false" UsernameToken="true" HttpDigest="false"
+          RELToken="false"/>
+        <tds:System DiscoveryResolve="false" DiscoveryBye="false" RemoteDiscovery="false"
+          SystemBackup="false" SystemLogging="false" FirmwareUpgrade="false" HttpFirmwareUpgrade="false"
+          HttpSystemBackup="false" HttpSystemLogging="false" HttpSupportInformation="false"/>
+      </tds:Capabilities>
+    </tds:GetServiceCapabilitiesResponse>"""
+
+
+def _get_media_service_capabilities(_ctx: OnvifContext, _request: ET.Element) -> str:
+    return """    <trt:GetServiceCapabilitiesResponse>
+      <trt:Capabilities SnapshotUri="true" Rotation="false" VideoSourceMode="false" OSD="false">
+        <trt:ProfileCapabilities MaximumNumberOfProfiles="1"/>
+        <trt:StreamingCapabilities RTPMulticast="false" RTP_TCP="true" RTP_RTSP_TCP="true"
+          NonAggregateControl="false" NoRTSPStreaming="false"/>
+      </trt:Capabilities>
+    </trt:GetServiceCapabilitiesResponse>"""
+
+
+def _get_event_service_capabilities(_ctx: OnvifContext, _request: ET.Element) -> str:
+    return """    <tev:GetServiceCapabilitiesResponse>
+      <tev:Capabilities WSSubscriptionPolicySupport="false" WSPullPointSupport="true"
+        WSPausableSubscriptionManagerInterfaceSupport="false" MaxNotificationProducers="1"
+        MaxPullPoints="4" PersistentNotificationStorage="false"/>
+    </tev:GetServiceCapabilitiesResponse>"""
+
+
+def _get_network_interfaces(ctx: OnvifContext, _request: ET.Element) -> str:
     """Report one interface with the advertised address and a MAC.
 
     NVRs key a camera by its MAC address; UniFi Protect asks for this during
@@ -364,7 +580,7 @@ def _get_network_interfaces(ctx: OnvifContext) -> str:
     </tds:GetNetworkInterfacesResponse>"""
 
 
-def _get_hostname(ctx: OnvifContext) -> str:
+def _get_hostname(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <tds:GetHostnameResponse>
       <tds:HostnameInformation>
         <tt:FromDHCP>false</tt:FromDHCP>
@@ -373,7 +589,7 @@ def _get_hostname(ctx: OnvifContext) -> str:
     </tds:GetHostnameResponse>"""
 
 
-def _get_network_protocols(ctx: OnvifContext) -> str:
+def _get_network_protocols(ctx: OnvifContext, _request: ET.Element) -> str:
     s = ctx.settings
     return f"""    <tds:GetNetworkProtocolsResponse>
       <tds:NetworkProtocols>
@@ -471,7 +687,7 @@ def _profile_body(ctx: OnvifContext) -> str:
       </tt:VideoEncoderConfiguration>{audio_encoder}"""
 
 
-def _get_audio_sources(ctx: OnvifContext) -> str:
+def _get_audio_sources(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         return "    <trt:GetAudioSourcesResponse/>"
     return """    <trt:GetAudioSourcesResponse>
@@ -481,7 +697,7 @@ def _get_audio_sources(ctx: OnvifContext) -> str:
     </trt:GetAudioSourcesResponse>"""
 
 
-def _get_audio_source_configurations(ctx: OnvifContext) -> str:
+def _get_audio_source_configurations(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         return "    <trt:GetAudioSourceConfigurationsResponse/>"
     return f"""    <trt:GetAudioSourceConfigurationsResponse>
@@ -491,7 +707,7 @@ def _get_audio_source_configurations(ctx: OnvifContext) -> str:
     </trt:GetAudioSourceConfigurationsResponse>"""
 
 
-def _get_audio_source_configuration(ctx: OnvifContext) -> str:
+def _get_audio_source_configuration(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         raise OnvifError("s:Sender", "ter:NoConfig", "This device has no audio configuration.", http_status=400)
     return f"""    <trt:GetAudioSourceConfigurationResponse>
@@ -501,7 +717,7 @@ def _get_audio_source_configuration(ctx: OnvifContext) -> str:
     </trt:GetAudioSourceConfigurationResponse>"""
 
 
-def _get_audio_encoder_configurations(ctx: OnvifContext) -> str:
+def _get_audio_encoder_configurations(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         return "    <trt:GetAudioEncoderConfigurationsResponse/>"
     return f"""    <trt:GetAudioEncoderConfigurationsResponse>
@@ -511,7 +727,7 @@ def _get_audio_encoder_configurations(ctx: OnvifContext) -> str:
     </trt:GetAudioEncoderConfigurationsResponse>"""
 
 
-def _get_audio_encoder_configuration(ctx: OnvifContext) -> str:
+def _get_audio_encoder_configuration(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         raise OnvifError("s:Sender", "ter:NoConfig", "This device has no audio configuration.", http_status=400)
     return f"""    <trt:GetAudioEncoderConfigurationResponse>
@@ -521,7 +737,7 @@ def _get_audio_encoder_configuration(ctx: OnvifContext) -> str:
     </trt:GetAudioEncoderConfigurationResponse>"""
 
 
-def _get_audio_encoder_configuration_options(ctx: OnvifContext) -> str:
+def _get_audio_encoder_configuration_options(ctx: OnvifContext, _request: ET.Element) -> str:
     if not _has_audio(ctx):
         return "    <trt:GetAudioEncoderConfigurationOptionsResponse/>"
     return """    <trt:GetAudioEncoderConfigurationOptionsResponse>
@@ -535,7 +751,7 @@ def _get_audio_encoder_configuration_options(ctx: OnvifContext) -> str:
     </trt:GetAudioEncoderConfigurationOptionsResponse>"""
 
 
-def _get_video_encoder_configurations(ctx: OnvifContext) -> str:
+def _get_video_encoder_configurations(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetVideoEncoderConfigurationsResponse>
       <trt:Configurations token="vec_1">
 {_video_encoder_config_body(ctx)}
@@ -543,7 +759,7 @@ def _get_video_encoder_configurations(ctx: OnvifContext) -> str:
     </trt:GetVideoEncoderConfigurationsResponse>"""
 
 
-def _get_video_encoder_configuration(ctx: OnvifContext) -> str:
+def _get_video_encoder_configuration(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetVideoEncoderConfigurationResponse>
       <trt:Configuration token="vec_1">
 {_video_encoder_config_body(ctx)}
@@ -551,7 +767,7 @@ def _get_video_encoder_configuration(ctx: OnvifContext) -> str:
     </trt:GetVideoEncoderConfigurationResponse>"""
 
 
-def _get_video_encoder_configuration_options(ctx: OnvifContext) -> str:
+def _get_video_encoder_configuration_options(ctx: OnvifContext, _request: ET.Element) -> str:
     """What the encoder *could* do - here: exactly what it does do.
 
     The stream is a fixed rendering pipeline, so every range is reported as a
@@ -575,7 +791,7 @@ def _get_video_encoder_configuration_options(ctx: OnvifContext) -> str:
     </trt:GetVideoEncoderConfigurationOptionsResponse>"""
 
 
-def _get_video_source_configurations(ctx: OnvifContext) -> str:
+def _get_video_source_configurations(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetVideoSourceConfigurationsResponse>
       <trt:Configurations token="vsc_1">
 {_video_source_config_body(ctx)}
@@ -583,7 +799,7 @@ def _get_video_source_configurations(ctx: OnvifContext) -> str:
     </trt:GetVideoSourceConfigurationsResponse>"""
 
 
-def _get_video_source_configuration(ctx: OnvifContext) -> str:
+def _get_video_source_configuration(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetVideoSourceConfigurationResponse>
       <trt:Configuration token="vsc_1">
 {_video_source_config_body(ctx)}
@@ -591,7 +807,7 @@ def _get_video_source_configuration(ctx: OnvifContext) -> str:
     </trt:GetVideoSourceConfigurationResponse>"""
 
 
-def _get_video_source_configuration_options(ctx: OnvifContext) -> str:
+def _get_video_source_configuration_options(ctx: OnvifContext, _request: ET.Element) -> str:
     s = ctx.settings
     return f"""    <trt:GetVideoSourceConfigurationOptionsResponse>
       <trt:Options>
@@ -606,7 +822,7 @@ def _get_video_source_configuration_options(ctx: OnvifContext) -> str:
     </trt:GetVideoSourceConfigurationOptionsResponse>"""
 
 
-def _get_profile(ctx: OnvifContext) -> str:
+def _get_profile(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetProfileResponse>
       <trt:Profile token="profile_1" fixed="true">
 {_profile_body(ctx)}
@@ -614,7 +830,7 @@ def _get_profile(ctx: OnvifContext) -> str:
     </trt:GetProfileResponse>"""
 
 
-def _get_profiles(ctx: OnvifContext) -> str:
+def _get_profiles(ctx: OnvifContext, _request: ET.Element) -> str:
     return f"""    <trt:GetProfilesResponse>
       <trt:Profiles token="profile_1" fixed="true">
 {_profile_body(ctx)}
@@ -622,7 +838,7 @@ def _get_profiles(ctx: OnvifContext) -> str:
     </trt:GetProfilesResponse>"""
 
 
-def _get_stream_uri(ctx: OnvifContext) -> str:
+def _get_stream_uri(ctx: OnvifContext, _request: ET.Element) -> str:
     uri = f"rtsp://{ctx.local_ip}:{ctx.settings.rtsp_port}/stream"
     return f"""    <trt:GetStreamUriResponse>
       <trt:MediaUri>
@@ -634,7 +850,7 @@ def _get_stream_uri(ctx: OnvifContext) -> str:
     </trt:GetStreamUriResponse>"""
 
 
-def _get_snapshot_uri(ctx: OnvifContext) -> str:
+def _get_snapshot_uri(ctx: OnvifContext, _request: ET.Element) -> str:
     # The token rides along so that a client which just GETs this URI without
     # credentials still gets a picture; see get_or_create_snapshot_token.
     uri = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/snapshot.jpg"
@@ -680,10 +896,24 @@ _HANDLERS = {
     "GetNetworkInterfaces": _get_network_interfaces,
     "GetNetworkProtocols": _get_network_protocols,
     "GetHostname": _get_hostname,
+    "CreatePullPointSubscription": _create_pull_point_subscription,
+    "PullMessages": _pull_messages,
+    "Renew": _renew,
+    "Unsubscribe": _unsubscribe,
+    "GetEventProperties": _get_event_properties,
+}
+
+# GetServiceCapabilities exists in every ONVIF service and must answer for the
+# endpoint it was called on - the media service replying with the event
+# service's capabilities would be nonsense to a client.
+_SERVICE_CAPABILITIES = {
+    "device_service": _get_device_service_capabilities,
+    "media_service": _get_media_service_capabilities,
+    "events_service": _get_event_service_capabilities,
 }
 
 
-def handle_soap_request(raw_body: bytes, ctx: OnvifContext, peer: str = "?") -> str:
+def handle_soap_request(raw_body: bytes, ctx: OnvifContext, peer: str = "?", service: str = "device_service") -> str:
     """Dispatch one ONVIF SOAP request.
 
     Every outcome is logged with the peer address: an NVR that refuses to
@@ -706,6 +936,8 @@ def handle_soap_request(raw_body: bytes, ctx: OnvifContext, peer: str = "?") -> 
     op_name = op_elem.tag.split("}")[-1]
 
     handler = _HANDLERS.get(op_name)
+    if op_name == "GetServiceCapabilities":
+        handler = _SERVICE_CAPABILITIES.get(service, _get_device_service_capabilities)
     if handler is None:
         logger.warning(
             "ONVIF: %s asked for %r, which this device does not implement. If your NVR "
@@ -724,7 +956,7 @@ def handle_soap_request(raw_body: bytes, ctx: OnvifContext, peer: str = "?") -> 
             raise NotAuthorized()
         logger.debug("ONVIF: %s called %s, authenticated by %s", peer, op_name, reason)
 
-    return soap_envelope(handler(ctx))
+    return soap_envelope(handler(ctx, op_elem))
 
 
 # ---------------------------------------------------------------------------

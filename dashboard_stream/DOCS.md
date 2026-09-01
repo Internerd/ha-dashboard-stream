@@ -97,7 +97,7 @@ camera.
 | `reload_interval` | Seconds between automatic page reloads (0 disables). Mitigates browser memory growth on long-running kiosks. |
 | `rtsp_port` / `onvif_port` | Fixed TCP ports for the stream and the ONVIF/snapshot service. Leave at the defaults (8554/8080) unless they conflict with something else on your host - the Supervisor-level watchdog is wired to the default ONVIF port. |
 | `onvif_extra_port` | Serve ONVIF/snapshot on a second port as well (0 = off). Set to `80` for NVRs that expect ONVIF on the standard HTTP port, such as UniFi Protect's Advanced Adoption. A port already in use on the host is logged and skipped, never fatal. |
-| `onvif_enabled` | Turns the ONVIF service and WS-Discovery responder on/off. The RTSP stream keeps working either way. |
+| `onvif_enabled` | Turns the ONVIF device/media/event services and the WS-Discovery responder on/off. The RTSP stream keeps working either way. |
 | `onvif_device_name` | Friendly name reported to ONVIF/NVR clients. |
 | `advertise_ip` | IP address handed out to ONVIF/RTSP clients (stream URL, ONVIF service addresses, WS-Discovery). Empty = auto-detect from the host's default route. Set it when Home Assistant has several interfaces/VLANs and your NVR is not on the default-route one. It changes only the *advertised* address - every service always listens on all interfaces. |
 | `stream_username` / `stream_password` | Credentials required for RTSP, ONVIF and the snapshot endpoint. Password is mandatory. The embedded RTSP server accepts only letters, digits and `! $ ( ) * + . ; < = > [ ] ^ _ - { } @ # &` in either value - no spaces, colons, slashes or quotes. Anything else is rejected at startup with a message rather than silently breaking authentication. |
@@ -168,7 +168,8 @@ Supporting services:
      only so Chromium's UPower/secret-service/session probes get answered
 
 Python app (aiohttp, one process):
-   • ONVIF device/media SOAP service + WS-Discovery  :8080, udp/3702 (LAN)
+   • ONVIF device/media/event SOAP service +
+     WS-Discovery                                    :8080, udp/3702 (LAN)
    • JPEG snapshot endpoint                          :8080 (LAN)
    • Ingress dashboard-picker web panel               Supervisor peers
                                                         only, via Home
@@ -223,7 +224,12 @@ Python app (aiohttp, one process):
   responses aiohttp logs the header size, not the image: a perfectly
   healthy 12 kB JPEG appears as `"GET /snapshot.jpg…" 200 240`. The
   `Snapshot capture is working … (N bytes)` line reports the real size.
-- **The NVR adopts the camera but the live feed will not load** - one cause
+- **The NVR adopts the camera but the live feed will not load** - since
+  1.6.0 the device reports the transports it supports (`RTP_TCP`,
+  `RTP_RTSP_TCP`) and offers the ONVIF event service that NVRs subscribe to
+  while setting a camera up; both were missing before, and an NVR that
+  cannot see how to fetch the stream, or cannot subscribe to events, may
+  simply refuse to show it. - one cause
   worth ruling out first is malformed ONVIF: an NVR's ONVIF client is
   usually generated from the WSDL and simply discards a response that
   violates the schema, without saying so. `tools/check_onvif_schema.py`

@@ -265,8 +265,15 @@ async def handle_onvif(request: web.Request) -> web.Response:
     if not ctx.settings.onvif_enabled:
         return web.Response(status=404, text="ONVIF is disabled in the app configuration.")
     body = await request.read()
+    if b"PullMessages" in body:
+        # A pull point is meant to block until something happens. Nothing ever
+        # does here, so hold the request briefly instead of answering instantly
+        # and inviting the client into a tight polling loop.
+        await asyncio.sleep(2)
     try:
-        xml_response = onvif.handle_soap_request(body, ctx, peer=request.remote or "?")
+        xml_response = onvif.handle_soap_request(
+            body, ctx, peer=request.remote or "?", service=request.path.rsplit("/", 1)[-1]
+        )
         return web.Response(text=xml_response, content_type="application/soap+xml")
     except onvif.OnvifError as err:
         return web.Response(text=onvif.soap_fault(err), content_type="application/soap+xml", status=err.http_status)
@@ -514,6 +521,9 @@ async def main() -> None:
     public_app["onvif_ctx"] = ctx
     public_app.router.add_post("/onvif/device_service", handle_onvif)
     public_app.router.add_post("/onvif/media_service", handle_onvif)
+    # The event service and the per-subscription URLs it hands out both land
+    # here; the operation inside the SOAP body decides what happens.
+    public_app.router.add_post("/onvif/events_service", handle_onvif)
     public_app.router.add_get("/snapshot.jpg", handle_snapshot)
     public_app.router.add_get("/health", handle_health)
 

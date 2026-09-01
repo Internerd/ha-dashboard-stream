@@ -4,6 +4,33 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-09-01
+
+### Added
+
+- The ONVIF **event service** (WS-BaseNotification pull point):
+  `GetEventProperties`, `CreatePullPointSubscription`, `PullMessages`,
+  `Renew`, `Unsubscribe` and `GetServiceCapabilities`, served at
+  `/onvif/events_service`. A dashboard never moves, so the service reports
+  the motion alarm as permanently false rather than inventing events - but
+  NVRs subscribe to it while setting a camera up, and this device previously
+  had nothing to subscribe to. Both working references for getting an RTSP
+  source into UniFi Protect (Happytime's server and the rtsp-to-onvif proxy)
+  implement it.
+- `GetCapabilities` now describes the device the way a camera does, including
+  the part that matters most: `StreamingCapabilities` with `RTP_TCP` and
+  `RTP_RTSP_TCP` set. Previously the Media capability carried nothing but an
+  address, leaving an NVR to guess how the stream can be fetched. The Device
+  capability gained its Network/System/IO/Security blocks and the new Events
+  capability advertises pull point support.
+- `GetServices` lists the event service alongside device and media.
+
+### Fixed
+
+- `GetServiceCapabilities` answers for the endpoint it was called on. It
+  exists in every ONVIF service, and this device answered every call with the
+  event service's capabilities regardless of which service was asked.
+
 ## [1.5.1] - 2026-09-01
 
 ### Fixed

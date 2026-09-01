@@ -54,6 +54,7 @@ CHECKS = [
     ("GetAudioSourceConfiguration", onvif.TRT_NS, TRT + "Configuration", "AudioSourceConfiguration"),
     ("GetStreamUri", onvif.TRT_NS, TRT + "MediaUri", "MediaUri"),
     ("GetSnapshotUri", onvif.TRT_NS, TRT + "MediaUri", "MediaUri"),
+    ("GetCapabilities", onvif.TDS_NS, TDS + "Capabilities", "Capabilities"),
     ("GetNetworkInterfaces", onvif.TDS_NS, TDS + "NetworkInterfaces", "NetworkInterface"),
     ("GetNetworkProtocols", onvif.TDS_NS, TDS + "NetworkProtocols", "NetworkProtocol"),
     ("GetHostname", onvif.TDS_NS, TDS + "HostnameInformation", "HostnameInformation"),

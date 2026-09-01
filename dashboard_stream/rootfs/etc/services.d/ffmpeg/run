@@ -18,9 +18,11 @@ done
 # smaller ones"), so it repacketises every frame. 1400 keeps the packets under
 # that limit and comfortably inside a 1500-byte MTU on the way to the NVR.
 #
-# -profile:v main: this is what the ONVIF service advertises as the stream's
-# H.264 profile; libx264 would otherwise default to High and NVRs are entitled
-# to expect the stream to match what the description claims.
+# -profile:v: kept in step with what the ONVIF service advertises - libx264
+# would otherwise default to High, leaving the stream and the device
+# description disagreeing. Baseline is the default because that is what NVR
+# decoders accept most reliably, and what a camera known to work with UniFi
+# Protect delivers (profile-level-id 42C028 in its SDP).
 bashio::log.info "Capturing ${DISPLAY} -> rtsp://127.0.0.1:${RTSP_PORT}/stream (${STREAM_WIDTH}x${STREAM_HEIGHT}@${STREAM_FRAMERATE})"
 # -probesize: one raw 1920x1080 frame is ~8 MB, well over ffmpeg's 5 MB
 # default, so the input probe never saw a full frame and warned "not enough
@@ -41,7 +43,7 @@ exec ffmpeg -hide_banner -loglevel warning -nostdin \
     -video_size "${STREAM_WIDTH}x${STREAM_HEIGHT}" -framerate "${STREAM_FRAMERATE}" -i "${DISPLAY}" \
     "${AUDIO_INPUT[@]}" \
     -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
-    -profile:v main \
+    -profile:v "${H264_PROFILE:-baseline}" \
     -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
     "${AUDIO_ARGS[@]}" \
     -f rtsp -rtsp_transport tcp -pkt_size 1400 \

@@ -135,6 +135,7 @@ def make_context(audio_track: str) -> onvif.OnvifContext:
         stream_height=720,
         framerate=15,
         audio_track=audio_track,
+        h264_profile="baseline",
         color_scheme="auto",
         render_wait=8,
         reload_interval=0,

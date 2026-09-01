@@ -6,7 +6,7 @@
 # whether your Home Assistant refers to it as an "Add-on" or an "App".
 ---
 name: "Dashboard Stream Cam"
-version: "1.6.0"
+version: "1.7.0"
 slug: "dashboard_stream"
 description: >-
   Renders a Home Assistant dashboard headlessly and publishes it as an
@@ -42,6 +42,7 @@ options:
   resolution: "1920x1080"
   framerate: 15
   audio_track: "silent"
+  h264_profile: "baseline"
   color_scheme: "auto"
   render_wait: 8
   reload_interval: 3600
@@ -64,6 +65,7 @@ schema:
   resolution: "list(1280x720|1366x768|1920x1080|1024x600|800x480)"
   framerate: "int(1,30)"
   audio_track: "list(silent|none)"
+  h264_profile: "list(baseline|main)"
   color_scheme: "list(auto|dark|light)"
   render_wait: "int(1,60)"
   reload_interval: "int(0,86400)"

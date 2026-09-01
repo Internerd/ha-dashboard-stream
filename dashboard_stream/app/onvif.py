@@ -626,6 +626,11 @@ def _video_source_config_body(ctx: OnvifContext) -> str:
       <tt:Bounds x="0" y="0" width="{s.stream_width}" height="{s.stream_height}"/>"""
 
 
+def _h264_profile(ctx: OnvifContext) -> str:
+    """The ONVIF spelling of the profile the encoder is configured for."""
+    return "Baseline" if ctx.settings.h264_profile == "baseline" else "Main"
+
+
 def _video_encoder_config_body(ctx: OnvifContext) -> str:
     s = ctx.settings
     return f"""      <tt:Name>VideoEncoderConfig</tt:Name>
@@ -638,7 +643,7 @@ def _video_encoder_config_body(ctx: OnvifContext) -> str:
         <tt:EncodingInterval>1</tt:EncodingInterval>
         <tt:BitrateLimit>2500</tt:BitrateLimit>
       </tt:RateControl>
-      <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>Main</tt:H264Profile></tt:H264>
+      <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>{_h264_profile(ctx)}</tt:H264Profile></tt:H264>
 {_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
@@ -785,7 +790,7 @@ def _get_video_encoder_configuration_options(ctx: OnvifContext, _request: ET.Ele
           <tt:GovLengthRange><tt:Min>{s.framerate * 2}</tt:Min><tt:Max>{s.framerate * 2}</tt:Max></tt:GovLengthRange>
           <tt:FrameRateRange><tt:Min>{s.framerate}</tt:Min><tt:Max>{s.framerate}</tt:Max></tt:FrameRateRange>
           <tt:EncodingIntervalRange><tt:Min>1</tt:Min><tt:Max>1</tt:Max></tt:EncodingIntervalRange>
-          <tt:H264ProfilesSupported>Main</tt:H264ProfilesSupported>
+          <tt:H264ProfilesSupported>{_h264_profile(ctx)}</tt:H264ProfilesSupported>
         </tt:H264>
       </trt:Options>
     </trt:GetVideoEncoderConfigurationOptionsResponse>"""

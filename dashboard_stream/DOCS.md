@@ -91,6 +91,7 @@ camera.
 | `dashboard_custom_url` | Advanced: render a full custom URL instead. |
 | `resolution` | Capture/output resolution. |
 | `framerate` | Output frame rate. |
+| `h264_profile` | H.264 profile the stream is encoded with, and which ONVIF reports. `baseline` (default) is what NVR decoders accept most reliably and what a camera known to work with UniFi Protect delivers; `main` compresses a little better. Change this first if an NVR adopts the camera and reads the stream but shows no picture. |
 | `audio_track` | `silent` (default) publishes a silent AAC track alongside the video, because a video-only stream is unusual for a camera and some NVRs refuse to play one - UniFi Protect reports "cannot load live feed". `none` streams video only. The ONVIF profile describes whichever is configured. |
 | `color_scheme` | `dark` renders the dashboard in dark mode, `light` forces light, `auto` leaves it to the browser (light). Works through the browser's `prefers-color-scheme`, so the Home Assistant user whose token this app uses must have its theme set to **Auto** - a theme pinned in that user's profile wins. |
 | `render_wait` | Seconds to let the page finish rendering before capture starts. |
@@ -238,6 +239,11 @@ Python app (aiohttp, one process):
   3. If you have a second device the same NVR *does* accept,
      `tools/compare_onvif.py` asks both the same questions and prints where
      the answers differ. That beats reasoning about what the NVR might want.
+     Doing exactly that against a working ONVIF server produced the
+     `h264_profile` default: it delivered Constrained Baseline
+     (`profile-level-id=42C028`) where this app delivered Main (`4D401F`).
+     For the closest match to that setup, pair `h264_profile: baseline` with
+     `audio_track: none` - the working device streams video only.
   Since 1.6.0 the device also reports the transports it supports (`RTP_TCP`,
   `RTP_RTSP_TCP`) and offers the ONVIF event service NVRs subscribe to while
   setting a camera up; both were missing before, and an NVR that cannot see

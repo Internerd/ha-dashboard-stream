@@ -4,6 +4,25 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-09-01
+
+### Added
+
+- `h264_profile` option, defaulting to `baseline`. Comparing this app
+  against an ONVIF server the same UniFi Protect console accepts (using
+  `tools/compare_onvif.py`) showed the working device delivering Constrained
+  Baseline - `profile-level-id=42C028` in its SDP, `Baseline` in its ONVIF
+  encoder options - where this app delivered Main (`4D401F`). Unlike the
+  metadata differences in that comparison, the profile is a decoder-level
+  property. The capture now encodes Baseline and the ONVIF profile and
+  encoder options report it; `main` restores the previous behavior.
+
+### Changed
+
+- The same comparison settles the audio question: the working device streams
+  video only, with no audio track at all, so `audio_track: none` is a
+  supported configuration rather than a risk. `silent` remains the default.
+
 ## [1.6.0] - 2026-09-01
 
 ### Added

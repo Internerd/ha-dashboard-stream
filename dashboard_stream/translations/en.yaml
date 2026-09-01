@@ -40,6 +40,14 @@ configuration:
       stream and show nothing but a "cannot load live feed" message. "none"
       streams video only, which is slightly leaner if your client is happy
       without audio.
+  h264_profile:
+    name: H.264 profile
+    description: >-
+      Which H.264 profile the stream is encoded with, and which the ONVIF
+      service reports. "baseline" is the most widely accepted by NVR
+      decoders and is what known-working ONVIF cameras deliver; "main"
+      compresses slightly better. Change this first if an NVR adopts the
+      camera and pulls the stream but never shows a picture.
   color_scheme:
     name: Color scheme
     description: >-

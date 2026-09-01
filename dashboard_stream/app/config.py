@@ -32,6 +32,7 @@ class Settings:
     stream_width: int
     stream_height: int
     framerate: int
+    audio_track: str
     color_scheme: str
     render_wait: int
     reload_interval: int
@@ -66,6 +67,7 @@ def load_settings() -> Settings:
         stream_width=_int(env.get("STREAM_WIDTH"), 1920),
         stream_height=_int(env.get("STREAM_HEIGHT"), 1080),
         framerate=_int(env.get("STREAM_FRAMERATE"), 15),
+        audio_track=env.get("AUDIO_TRACK", "silent").strip().lower(),
         color_scheme=env.get("COLOR_SCHEME", "auto").strip().lower(),
         render_wait=_int(env.get("RENDER_WAIT"), 8),
         reload_interval=_int(env.get("RELOAD_INTERVAL"), 3600),

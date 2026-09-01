@@ -91,6 +91,7 @@ camera.
 | `dashboard_custom_url` | Advanced: render a full custom URL instead. |
 | `resolution` | Capture/output resolution. |
 | `framerate` | Output frame rate. |
+| `audio_track` | `silent` (default) publishes a silent AAC track alongside the video, because a video-only stream is unusual for a camera and some NVRs refuse to play one - UniFi Protect reports "cannot load live feed". `none` streams video only. The ONVIF profile describes whichever is configured. |
 | `color_scheme` | `dark` renders the dashboard in dark mode, `light` forces light, `auto` leaves it to the browser (light). Works through the browser's `prefers-color-scheme`, so the Home Assistant user whose token this app uses must have its theme set to **Auto** - a theme pinned in that user's profile wins. |
 | `render_wait` | Seconds to let the page finish rendering before capture starts. |
 | `reload_interval` | Seconds between automatic page reloads (0 disables). Mitigates browser memory growth on long-running kiosks. |
@@ -222,6 +223,12 @@ Python app (aiohttp, one process):
   responses aiohttp logs the header size, not the image: a perfectly
   healthy 12 kB JPEG appears as `"GET /snapshot.jpg…" 200 240`. The
   `Snapshot capture is working … (N bytes)` line reports the real size.
+- **The NVR adopts the camera but the live feed will not load** - if the log
+  shows the RTSP session being read and snapshots answered with 200, the
+  device side is doing its job and the client is refusing the stream itself.
+  The usual reason is the missing audio track; leave `audio_track` at
+  `silent`. VLC (`vlc --rtsp-tcp rtsp://user:pass@host:port/stream`) is the
+  quickest way to confirm the stream itself is fine.
 - **The NVR adopted the camera but shows no picture** - check the log for
   `GET /snapshot.jpg ... 401` and for an ONVIF operation logged as not
   implemented. Both were what stopped UniFi Protect before 1.3.0: it asked

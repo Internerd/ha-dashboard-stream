@@ -409,14 +409,111 @@ def _video_encoder_config_body(ctx: OnvifContext) -> str:
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
 
+def _has_audio(ctx: OnvifContext) -> bool:
+    return ctx.settings.audio_track == "silent"
+
+
+def _audio_source_config_body(_ctx: OnvifContext) -> str:
+    return """      <tt:Name>AudioSourceConfig</tt:Name>
+      <tt:UseCount>1</tt:UseCount>
+      <tt:SourceToken>as_1</tt:SourceToken>"""
+
+
+def _audio_encoder_config_body(_ctx: OnvifContext) -> str:
+    """Matches the silent AAC track the capture publishes."""
+    return """      <tt:Name>AudioEncoderConfig</tt:Name>
+      <tt:UseCount>1</tt:UseCount>
+      <tt:Encoding>AAC</tt:Encoding>
+      <tt:Bitrate>16</tt:Bitrate>
+      <tt:SampleRate>16</tt:SampleRate>
+      <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
+
+
 def _profile_body(ctx: OnvifContext) -> str:
+    # Element order follows the ONVIF schema sequence: video source, audio
+    # source, video encoder, audio encoder.
+    audio_source = ""
+    audio_encoder = ""
+    if _has_audio(ctx):
+        audio_source = f"""
+      <tt:AudioSourceConfiguration token="asc_1">
+{_audio_source_config_body(ctx)}
+      </tt:AudioSourceConfiguration>"""
+        audio_encoder = f"""
+      <tt:AudioEncoderConfiguration token="aec_1">
+{_audio_encoder_config_body(ctx)}
+      </tt:AudioEncoderConfiguration>"""
     return f"""      <tt:Name>Dashboard</tt:Name>
       <tt:VideoSourceConfiguration token="vsc_1">
 {_video_source_config_body(ctx)}
-      </tt:VideoSourceConfiguration>
+      </tt:VideoSourceConfiguration>{audio_source}
       <tt:VideoEncoderConfiguration token="vec_1">
 {_video_encoder_config_body(ctx)}
-      </tt:VideoEncoderConfiguration>"""
+      </tt:VideoEncoderConfiguration>{audio_encoder}"""
+
+
+def _get_audio_sources(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        return "    <trt:GetAudioSourcesResponse/>"
+    return """    <trt:GetAudioSourcesResponse>
+      <trt:AudioSources token="as_1">
+        <tt:Channels>1</tt:Channels>
+      </trt:AudioSources>
+    </trt:GetAudioSourcesResponse>"""
+
+
+def _get_audio_source_configurations(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        return "    <trt:GetAudioSourceConfigurationsResponse/>"
+    return f"""    <trt:GetAudioSourceConfigurationsResponse>
+      <trt:Configurations token="asc_1">
+{_audio_source_config_body(ctx)}
+      </trt:Configurations>
+    </trt:GetAudioSourceConfigurationsResponse>"""
+
+
+def _get_audio_source_configuration(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        raise OnvifError("s:Sender", "ter:NoConfig", "This device has no audio configuration.", http_status=400)
+    return f"""    <trt:GetAudioSourceConfigurationResponse>
+      <trt:Configuration token="asc_1">
+{_audio_source_config_body(ctx)}
+      </trt:Configuration>
+    </trt:GetAudioSourceConfigurationResponse>"""
+
+
+def _get_audio_encoder_configurations(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        return "    <trt:GetAudioEncoderConfigurationsResponse/>"
+    return f"""    <trt:GetAudioEncoderConfigurationsResponse>
+      <trt:Configurations token="aec_1">
+{_audio_encoder_config_body(ctx)}
+      </trt:Configurations>
+    </trt:GetAudioEncoderConfigurationsResponse>"""
+
+
+def _get_audio_encoder_configuration(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        raise OnvifError("s:Sender", "ter:NoConfig", "This device has no audio configuration.", http_status=400)
+    return f"""    <trt:GetAudioEncoderConfigurationResponse>
+      <trt:Configuration token="aec_1">
+{_audio_encoder_config_body(ctx)}
+      </trt:Configuration>
+    </trt:GetAudioEncoderConfigurationResponse>"""
+
+
+def _get_audio_encoder_configuration_options(ctx: OnvifContext) -> str:
+    if not _has_audio(ctx):
+        return "    <trt:GetAudioEncoderConfigurationOptionsResponse/>"
+    return """    <trt:GetAudioEncoderConfigurationOptionsResponse>
+      <trt:Options>
+        <tt:Options>
+          <tt:Encoding>AAC</tt:Encoding>
+          <tt:BitrateList><tt:Items>16</tt:Items></tt:BitrateList>
+          <tt:SampleRateList><tt:Items>16</tt:Items></tt:SampleRateList>
+        </tt:Options>
+      </trt:Options>
+    </trt:GetAudioEncoderConfigurationOptionsResponse>"""
 
 
 def _get_video_encoder_configurations(ctx: OnvifContext) -> str:
@@ -555,6 +652,12 @@ _HANDLERS = {
     "GetVideoSourceConfigurations": _get_video_source_configurations,
     "GetVideoSourceConfiguration": _get_video_source_configuration,
     "GetVideoSourceConfigurationOptions": _get_video_source_configuration_options,
+    "GetAudioSources": _get_audio_sources,
+    "GetAudioSourceConfigurations": _get_audio_source_configurations,
+    "GetAudioSourceConfiguration": _get_audio_source_configuration,
+    "GetAudioEncoderConfigurations": _get_audio_encoder_configurations,
+    "GetAudioEncoderConfiguration": _get_audio_encoder_configuration,
+    "GetAudioEncoderConfigurationOptions": _get_audio_encoder_configuration_options,
     "GetNetworkInterfaces": _get_network_interfaces,
     "GetNetworkProtocols": _get_network_protocols,
     "GetHostname": _get_hostname,

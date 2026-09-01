@@ -32,6 +32,14 @@ configuration:
   framerate:
     name: Frame rate
     description: Output stream frame rate in frames per second.
+  audio_track:
+    name: Audio track
+    description: >-
+      Whether the stream carries an audio track. A dashboard has no sound, so
+      "silent" publishes a silent one - many NVRs refuse to play a video-only
+      stream and show nothing but a "cannot load live feed" message. "none"
+      streams video only, which is slightly leaner if your client is happy
+      without audio.
   color_scheme:
     name: Color scheme
     description: >-

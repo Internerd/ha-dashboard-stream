@@ -4,6 +4,24 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-09-01
+
+### Added
+
+- `audio_track` option, defaulting to `silent`: the capture now publishes a
+  silent AAC track alongside the video. A dashboard has no sound, but a
+  video-only stream is unusual for a camera and NVR playback pipelines
+  commonly expect an audio track - UniFi Protect adopts the camera, reads the
+  RTSP session and then reports "cannot load live feed". Verified end to end:
+  a client now sees two tracks (H264 + AAC LC, mono 16 kHz) instead of one.
+  `none` restores the previous video-only stream.
+- The ONVIF profile describes the audio track when it is enabled
+  (`AudioSourceConfiguration` and `AudioEncoderConfiguration`, in ONVIF's
+  element order), plus `GetAudioSources`,
+  `GetAudioSourceConfiguration(s)`, `GetAudioEncoderConfiguration(s)` and
+  `GetAudioEncoderConfigurationOptions`. With `audio_track: none` those
+  answer with empty lists, so the description always matches the stream.
+
 ## [1.4.1] - 2026-09-01
 
 ### Fixed

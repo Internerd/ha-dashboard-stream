@@ -4,6 +4,17 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.1] - 2026-09-02
+
+### Changed
+
+- One keyframe per second instead of one every two. The camera this NVR
+  displays was measured at 1.01 s; this app sent 2.00 s. It also halves how
+  long a client waits for its first decodable picture, because a decoder can
+  only start on a keyframe. The ONVIF `GovLength` follows, so the stream and
+  the device description keep agreeing. Verified on both paths: keyframe
+  interval 1.00 s, one slice per frame, SPS+PPS with every keyframe.
+
 ## [1.9.0] - 2026-09-02
 
 ### Changed

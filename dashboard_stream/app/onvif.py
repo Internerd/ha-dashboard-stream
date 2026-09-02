@@ -764,12 +764,12 @@ def _audio_source_config_body(ctx: OnvifContext) -> str:
 
 
 def _audio_encoder_config_body(ctx: OnvifContext) -> str:
-    """Matches the silent AAC track the capture publishes on every path."""
+    """Matches the silent G.711 track the capture publishes on every path."""
     return f"""      <tt:Name>AudioEncoderConfig</tt:Name>
       <tt:UseCount>{len(media_profiles(ctx))}</tt:UseCount>
-      <tt:Encoding>AAC</tt:Encoding>
-      <tt:Bitrate>16</tt:Bitrate>
-      <tt:SampleRate>16</tt:SampleRate>
+      <tt:Encoding>G711</tt:Encoding>
+      <tt:Bitrate>64</tt:Bitrate>
+      <tt:SampleRate>8</tt:SampleRate>
 {_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
@@ -853,9 +853,9 @@ def _get_audio_encoder_configuration_options(ctx: OnvifContext, _request: ET.Ele
     return """    <trt:GetAudioEncoderConfigurationOptionsResponse>
       <trt:Options>
         <tt:Options>
-          <tt:Encoding>AAC</tt:Encoding>
-          <tt:BitrateList><tt:Items>16</tt:Items></tt:BitrateList>
-          <tt:SampleRateList><tt:Items>16</tt:Items></tt:SampleRateList>
+          <tt:Encoding>G711</tt:Encoding>
+          <tt:BitrateList><tt:Items>64</tt:Items></tt:BitrateList>
+          <tt:SampleRateList><tt:Items>8</tt:Items></tt:SampleRateList>
         </tt:Options>
       </trt:Options>
     </trt:GetAudioEncoderConfigurationOptionsResponse>"""

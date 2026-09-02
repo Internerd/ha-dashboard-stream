@@ -4,6 +4,34 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-09-02
+
+### Changed
+
+- **`audio_track` now defaults to `none`.** Comparing this app's stream with a
+  working camera (`tools/compare_rtsp.py`) showed the silent AAC track was
+  malformed: every RTP packet carried eleven access units, so the audio
+  arrived as a 704 ms burst every 704 ms - 1.4 packets per second - while the
+  video ran at 67 ms per frame. A camera sends about 59 ms per audio packet.
+  Neither raising the bitrate nor `-re` on the input changed it. The other
+  ONVIF server this NVR accepts publishes no audio at all, and a dashboard
+  has no sound, so video only is the default now.
+- `audio_track: silent` publishes **G.711** instead of AAC, and the ONVIF
+  audio configuration reports G711/64/8 to match. Measured at 7.9 packets per
+  second with a 64 ms timestamp step, which is what the reference camera
+  does. The option is worth keeping for an NVR that refuses a video-only
+  camera; it is simply no longer broken when it is on.
+
+### Notes
+
+Two measured differences from a real camera remain and cannot be changed from
+this app: the embedded RTSP server sends its first RTCP sender report only
+after 10 s (the camera sends one after 1.2 s), and its SDP has no
+session-level `a=control:*`, `a=range:`, `b=AS:` or per-track `a=recvonly`.
+Both are mediamtx's, with no configuration for either. They matter less
+without an audio track, since nothing has to be synchronised against the
+video.
+
 ## [1.8.1] - 2026-09-02
 
 ### Fixed

@@ -4,6 +4,27 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.8.1] - 2026-09-02
+
+### Fixed
+
+- The stream now carries **SPS and PPS ahead of every keyframe**. x264 was
+  putting the parameter sets in the container header only, so they reached a
+  client in the SDP's `sprop-parameter-sets` and never in the stream itself.
+  A media player reads them there - which is why VLC always played this
+  stream - while an NVR that expects a camera's parameter sets in-band never
+  gets a decodable frame and sits on an open RTSP session showing nothing.
+- **One slice per frame** instead of four. `-tune zerolatency` enables x264's
+  sliced threads, which cuts every frame into one slice per CPU core, so the
+  stream's shape depended on the host's core count. Cameras send one slice
+  per frame; some NVR decoders handle nothing else.
+
+Both were measured, not guessed: `tools/compare_rtsp.py` plays a stream and
+reports what is on the wire. Before, every frame arrived as four slices with
+no parameter set anywhere in 6 s of video; after, `slices per frame: 1` and
+`parameter sets in-band: SPS+PPS with every keyframe`, with the frame rate
+(14.99/10.00 fps) and keyframe interval (2.00 s) unchanged.
+
 ## [1.8.0] - 2026-09-02
 
 ### Added

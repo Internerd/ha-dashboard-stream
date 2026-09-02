@@ -251,6 +251,14 @@ Python app (aiohttp, one process):
      for which profile it asked about - with `log_level: debug` every ONVIF
      call is logged by name - and note that the URI handed back is `/stream`
      for `profile_1` and `/substream` for `profile_2`.
+  5. If the NVR reads the RTSP session (the app log shows `is reading from
+     path 'stream'`) and *still* shows nothing, the ONVIF side is done and
+     the video itself is what it refuses. `tools/compare_rtsp.py` plays your
+     stream and a working camera's and prints what differs on the wire -
+     frame rate from the RTP timestamps, slices per frame, whether SPS/PPS
+     are repeated in-band, the decoded SPS. That is how the two defects
+     fixed in 1.8.1 were found; a camera you can point it at is worth more
+     than any amount of reasoning about what the NVR wants.
   Since 1.6.0 the device also reports the transports it supports (`RTP_TCP`,
   `RTP_RTSP_TCP`) and offers the ONVIF event service NVRs subscribe to while
   setting a camera up; both were missing before, and an NVR that cannot see

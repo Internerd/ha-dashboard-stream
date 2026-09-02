@@ -21,7 +21,8 @@ contains one app, [`dashboard_stream/`](./dashboard_stream), which:
 
 - renders a dashboard you pick headlessly (Chromium in a virtual
   framebuffer),
-- captures and encodes it (ffmpeg) to an RTSP stream (mediamtx),
+- captures and encodes it (ffmpeg) to an RTSP stream plus a smaller
+  substream (mediamtx), the way a real camera offers main and sub streams,
 - exposes a minimal ONVIF device/media service and WS-Discovery responder
   so it is discoverable and addable as a third-party ONVIF camera,
 - gates the stream, ONVIF service and snapshot endpoint behind a

@@ -12,7 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `tools/check_onvif_schema.py`: validates the app's ONVIF responses against
   the official ONVIF schema (mandatory elements and element order,
-  recursively). Run it after touching `dashboard_stream/app/onvif.py`.
+  recursively). Run it after touching `dashboard_stream/app/onvif.py`. It
+  walks every combination of the `audio_track` and `substream` options, so
+  responses are checked with one profile and with two.
 - `tools/compare_onvif.py`: asks two ONVIF/RTSP devices the same questions
   and prints where their answers differ, with addresses, timestamps, serials
   and tokens normalised away. For the case where an NVR accepts one device

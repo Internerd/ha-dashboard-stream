@@ -15,6 +15,7 @@ DASHBOARD_PATH="$(bashio::config 'dashboard_path')"
 DASHBOARD_CUSTOM_URL="$(bashio::config 'dashboard_custom_url')"
 RESOLUTION="$(bashio::config 'resolution')"
 FRAMERATE="$(bashio::config 'framerate')"
+SUBSTREAM="$(bashio::config 'substream')"
 AUDIO_TRACK="$(bashio::config 'audio_track')"
 H264_PROFILE="$(bashio::config 'h264_profile')"
 COLOR_SCHEME="$(bashio::config 'color_scheme')"
@@ -76,6 +77,21 @@ fi
 WIDTH="${RESOLUTION%x*}"
 HEIGHT="${RESOLUTION#*x}"
 
+# Substream geometry. Every camera this app has been compared against - and
+# that UniFi Protect accepts - publishes a second, much smaller stream next to
+# the main one, and an NVR picks between them per view. 640 wide with the same
+# aspect ratio (rounded to an even height, which H.264 requires) at no more
+# than 10 fps is what those cameras deliver.
+SUB_WIDTH=640
+if [[ "${WIDTH}" -lt "${SUB_WIDTH}" ]]; then
+    SUB_WIDTH="${WIDTH}"
+fi
+SUB_HEIGHT=$(( ((SUB_WIDTH * HEIGHT / WIDTH) + 1) / 2 * 2 ))
+SUB_FRAMERATE="${FRAMERATE}"
+if [[ "${SUB_FRAMERATE}" -gt 10 ]]; then
+    SUB_FRAMERATE=10
+fi
+
 # ---------------------------------------------------------------------------
 # Resolve the dashboard URL to render.
 # Priority: dashboard_custom_url > dashboard picked via the web panel
@@ -115,6 +131,10 @@ write_env DASHBOARD_PATH "${TARGET_PATH}"
 write_env STREAM_WIDTH "${WIDTH}"
 write_env STREAM_HEIGHT "${HEIGHT}"
 write_env STREAM_FRAMERATE "${FRAMERATE}"
+write_env SUBSTREAM "${SUBSTREAM}"
+write_env SUB_WIDTH "${SUB_WIDTH}"
+write_env SUB_HEIGHT "${SUB_HEIGHT}"
+write_env SUB_FRAMERATE "${SUB_FRAMERATE}"
 write_env AUDIO_TRACK "${AUDIO_TRACK}"
 write_env H264_PROFILE "${H264_PROFILE}"
 write_env COLOR_SCHEME "${COLOR_SCHEME}"
@@ -154,6 +174,21 @@ esac
 # Credentials are quoted as JSON (a subset of YAML) so that a password
 # containing #, quotes, @ or * cannot be truncated, re-interpreted or reject
 # the whole config - all of which look like "invalid credentials" to an NVR.
+SUBSTREAM_READ=""
+SUBSTREAM_PUBLISH=""
+SUBSTREAM_PATH=""
+if bashio::var.true "${SUBSTREAM}"; then
+    SUBSTREAM_READ="
+      - action: read
+        path: substream"
+    SUBSTREAM_PUBLISH="
+      - action: publish
+        path: substream"
+    SUBSTREAM_PATH="
+  substream:
+    source: publisher"
+fi
+
 STREAM_USERNAME_YAML="$(jq -Rn --arg v "${STREAM_USERNAME}" '$v')"
 STREAM_PASSWORD_YAML="$(jq -Rn --arg v "${STREAM_PASSWORD}" '$v')"
 
@@ -184,7 +219,7 @@ authInternalUsers:
     ips: []
     permissions:
       - action: read
-        path: stream
+        path: stream${SUBSTREAM_READ}
   # A fixed, non-secret credential used only by this app's own ffmpeg
   # process to publish the captured video. Restricted to loopback so it
   # is meaningless if ever observed (e.g. via "ps") from outside the
@@ -194,10 +229,13 @@ authInternalUsers:
     ips: ["127.0.0.1"]
     permissions:
       - action: publish
-        path: stream
+        path: stream${SUBSTREAM_PUBLISH}
 paths:
   stream:
-    source: publisher
+    source: publisher${SUBSTREAM_PATH}
 EOF
 
+if bashio::var.true "${SUBSTREAM}"; then
+    bashio::log.info "Substream enabled: ${SUB_WIDTH}x${SUB_HEIGHT}@${SUB_FRAMERATE} on /substream."
+fi
 bashio::log.info "Configuration ready (log_level=${LOG_LEVEL}, onvif_enabled=${ONVIF_ENABLED})."

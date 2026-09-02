@@ -1,12 +1,13 @@
 """A deliberately minimal ONVIF Device/Media service and WS-Discovery
 responder.
 
-This is not a general-purpose ONVIF stack. It describes exactly one fixed
-video profile (this app's own rendered dashboard) so that NVR software
-such as UniFi Protect can discover it, ask for its capabilities, and
-retrieve the RTSP stream and JPEG snapshot URLs - all gated behind the
-same username/password used for the RTSP stream itself, via WS-Security
-UsernameToken (digest or plain).
+This is not a general-purpose ONVIF stack. It describes the fixed profiles
+this app really publishes - a main stream and, unless it is switched off, a
+smaller substream, both of the same rendered dashboard - so that NVR
+software such as UniFi Protect can discover the camera, ask for its
+capabilities, and retrieve the RTSP stream and JPEG snapshot URLs. All of
+it is gated behind the same username/password used for the RTSP stream
+itself, via WS-Security UsernameToken (digest or plain).
 
 Relevant specs (referenced for attribution, see NOTICE.md):
  - ONVIF Core Specification / WSDLs, https://www.onvif.org/profiles/specifications/
@@ -343,7 +344,7 @@ def _get_capabilities(ctx: OnvifContext, _request: ET.Element) -> str:
           </tt:StreamingCapabilities>
           <tt:Extension>
             <tt:ProfileCapabilities>
-              <tt:MaximumNumberOfProfiles>1</tt:MaximumNumberOfProfiles>
+              <tt:MaximumNumberOfProfiles>{len(media_profiles(ctx))}</tt:MaximumNumberOfProfiles>
             </tt:ProfileCapabilities>
           </tt:Extension>
         </tt:Media>
@@ -534,10 +535,10 @@ def _get_device_service_capabilities(_ctx: OnvifContext, _request: ET.Element) -
     </tds:GetServiceCapabilitiesResponse>"""
 
 
-def _get_media_service_capabilities(_ctx: OnvifContext, _request: ET.Element) -> str:
-    return """    <trt:GetServiceCapabilitiesResponse>
+def _get_media_service_capabilities(ctx: OnvifContext, _request: ET.Element) -> str:
+    return f"""    <trt:GetServiceCapabilitiesResponse>
       <trt:Capabilities SnapshotUri="true" Rotation="false" VideoSourceMode="false" OSD="false">
-        <trt:ProfileCapabilities MaximumNumberOfProfiles="1"/>
+        <trt:ProfileCapabilities MaximumNumberOfProfiles="{len(media_profiles(ctx))}"/>
         <trt:StreamingCapabilities RTPMulticast="false" RTP_TCP="true" RTP_RTSP_TCP="true"
           NonAggregateControl="false" NoRTSPStreaming="false"/>
       </trt:Capabilities>
@@ -618,10 +619,115 @@ _MULTICAST_OFF = """      <tt:Multicast>
       </tt:Multicast>"""
 
 
+@dataclass(frozen=True)
+class MediaProfile:
+    """One media profile, backed by an RTSP path this app really publishes.
+
+    Every camera this app has been compared against - and that UniFi Protect
+    accepts - offers a main stream plus a smaller substream, and an NVR picks
+    between them per view. Nothing here is advertised that the capture does
+    not actually encode: each profile maps to one ffmpeg output and one
+    mediamtx path.
+    """
+
+    token: str
+    name: str
+    path: str
+    encoder_token: str
+    width: int
+    height: int
+    framerate: int
+    bitrate: int  # kbit/s, kept in step with /etc/services.d/ffmpeg/run
+
+
+def media_profiles(ctx: OnvifContext) -> list[MediaProfile]:
+    s = ctx.settings
+    profiles = [
+        MediaProfile(
+            "profile_1", "MainStream", "stream", "vec_1",
+            s.stream_width, s.stream_height, s.framerate, 2500,
+        )
+    ]
+    if s.substream:
+        profiles.append(
+            MediaProfile(
+                "profile_2", "SubStream", "substream", "vec_2",
+                s.sub_width, s.sub_height, s.sub_framerate, 500,
+            )
+        )
+    return profiles
+
+
+def _request_child(request: ET.Element, name: str) -> str:
+    """Text of the first child element with this local name, any namespace."""
+    for child in request:
+        if child.tag.split("}")[-1] == name:
+            return (child.text or "").strip()
+    return ""
+
+
+def _no_profile(token: str) -> OnvifError:
+    return OnvifError("s:Sender", "ter:NoProfile", f"No profile with token {token!r}.", http_status=400)
+
+
+def _no_config(token: str) -> OnvifError:
+    return OnvifError(
+        "s:Sender", "ter:NoConfig", f"No video encoder configuration with token {token!r}.", http_status=400
+    )
+
+
+def _profile_for_request(ctx: OnvifContext, request: ET.Element) -> MediaProfile:
+    """The profile a request names, or the main stream when it names none."""
+    profiles = media_profiles(ctx)
+    token = _request_child(request, "ProfileToken")
+    if not token:
+        return profiles[0]
+    for profile in profiles:
+        if profile.token == token:
+            return profile
+    raise _no_profile(token)
+
+
+def _encoder_for_request(ctx: OnvifContext, request: ET.Element) -> MediaProfile:
+    profiles = media_profiles(ctx)
+    token = _request_child(request, "ConfigurationToken")
+    if not token:
+        return profiles[0]
+    for profile in profiles:
+        if profile.encoder_token == token:
+            return profile
+    raise _no_config(token)
+
+
+def _encoders_for_options_request(ctx: OnvifContext, request: ET.Element) -> list[MediaProfile]:
+    """Which encoders a GetVideoEncoderConfigurationOptions call asks about.
+
+    Both tokens are optional in that operation; with neither, the answer has
+    to cover every configuration the device has.
+    """
+    profiles = media_profiles(ctx)
+    config_token = _request_child(request, "ConfigurationToken")
+    if config_token:
+        selected = [p for p in profiles if p.encoder_token == config_token]
+        if not selected:
+            raise _no_config(config_token)
+        return selected
+    profile_token = _request_child(request, "ProfileToken")
+    if profile_token:
+        selected = [p for p in profiles if p.token == profile_token]
+        if not selected:
+            raise _no_profile(profile_token)
+        return selected
+    return profiles
+
+
 def _video_source_config_body(ctx: OnvifContext) -> str:
     s = ctx.settings
+    # One video source shared by every profile - the substream is the same
+    # rendering, scaled down by its own encoder, exactly as a camera scales
+    # one sensor into two streams.
     return f"""      <tt:Name>VideoSourceConfig</tt:Name>
-      <tt:UseCount>1</tt:UseCount>
+      <tt:UseCount>{len(media_profiles(ctx))}</tt:UseCount>
       <tt:SourceToken>vs_1</tt:SourceToken>
       <tt:Bounds x="0" y="0" width="{s.stream_width}" height="{s.stream_height}"/>"""
 
@@ -631,19 +737,18 @@ def _h264_profile(ctx: OnvifContext) -> str:
     return "Baseline" if ctx.settings.h264_profile == "baseline" else "Main"
 
 
-def _video_encoder_config_body(ctx: OnvifContext) -> str:
-    s = ctx.settings
-    return f"""      <tt:Name>VideoEncoderConfig</tt:Name>
+def _video_encoder_config_body(ctx: OnvifContext, profile: MediaProfile) -> str:
+    return f"""      <tt:Name>VideoEncoder_{profile.name}</tt:Name>
       <tt:UseCount>1</tt:UseCount>
       <tt:Encoding>H264</tt:Encoding>
-      <tt:Resolution><tt:Width>{s.stream_width}</tt:Width><tt:Height>{s.stream_height}</tt:Height></tt:Resolution>
+      <tt:Resolution><tt:Width>{profile.width}</tt:Width><tt:Height>{profile.height}</tt:Height></tt:Resolution>
       <tt:Quality>5</tt:Quality>
       <tt:RateControl>
-        <tt:FrameRateLimit>{s.framerate}</tt:FrameRateLimit>
+        <tt:FrameRateLimit>{profile.framerate}</tt:FrameRateLimit>
         <tt:EncodingInterval>1</tt:EncodingInterval>
-        <tt:BitrateLimit>2500</tt:BitrateLimit>
+        <tt:BitrateLimit>{profile.bitrate}</tt:BitrateLimit>
       </tt:RateControl>
-      <tt:H264><tt:GovLength>{s.framerate * 2}</tt:GovLength><tt:H264Profile>{_h264_profile(ctx)}</tt:H264Profile></tt:H264>
+      <tt:H264><tt:GovLength>{profile.framerate * 2}</tt:GovLength><tt:H264Profile>{_h264_profile(ctx)}</tt:H264Profile></tt:H264>
 {_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
@@ -652,16 +757,16 @@ def _has_audio(ctx: OnvifContext) -> bool:
     return ctx.settings.audio_track == "silent"
 
 
-def _audio_source_config_body(_ctx: OnvifContext) -> str:
-    return """      <tt:Name>AudioSourceConfig</tt:Name>
-      <tt:UseCount>1</tt:UseCount>
+def _audio_source_config_body(ctx: OnvifContext) -> str:
+    return f"""      <tt:Name>AudioSourceConfig</tt:Name>
+      <tt:UseCount>{len(media_profiles(ctx))}</tt:UseCount>
       <tt:SourceToken>as_1</tt:SourceToken>"""
 
 
-def _audio_encoder_config_body(_ctx: OnvifContext) -> str:
-    """Matches the silent AAC track the capture publishes."""
+def _audio_encoder_config_body(ctx: OnvifContext) -> str:
+    """Matches the silent AAC track the capture publishes on every path."""
     return f"""      <tt:Name>AudioEncoderConfig</tt:Name>
-      <tt:UseCount>1</tt:UseCount>
+      <tt:UseCount>{len(media_profiles(ctx))}</tt:UseCount>
       <tt:Encoding>AAC</tt:Encoding>
       <tt:Bitrate>16</tt:Bitrate>
       <tt:SampleRate>16</tt:SampleRate>
@@ -669,7 +774,7 @@ def _audio_encoder_config_body(_ctx: OnvifContext) -> str:
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
 
-def _profile_body(ctx: OnvifContext) -> str:
+def _profile_body(ctx: OnvifContext, profile: MediaProfile) -> str:
     # Element order follows the ONVIF schema sequence: video source, audio
     # source, video encoder, audio encoder.
     audio_source = ""
@@ -683,12 +788,12 @@ def _profile_body(ctx: OnvifContext) -> str:
       <tt:AudioEncoderConfiguration token="aec_1">
 {_audio_encoder_config_body(ctx)}
       </tt:AudioEncoderConfiguration>"""
-    return f"""      <tt:Name>Dashboard</tt:Name>
+    return f"""      <tt:Name>{profile.name}</tt:Name>
       <tt:VideoSourceConfiguration token="vsc_1">
 {_video_source_config_body(ctx)}
       </tt:VideoSourceConfiguration>{audio_source}
-      <tt:VideoEncoderConfiguration token="vec_1">
-{_video_encoder_config_body(ctx)}
+      <tt:VideoEncoderConfiguration token="{profile.encoder_token}">
+{_video_encoder_config_body(ctx, profile)}
       </tt:VideoEncoderConfiguration>{audio_encoder}"""
 
 
@@ -757,38 +862,50 @@ def _get_audio_encoder_configuration_options(ctx: OnvifContext, _request: ET.Ele
 
 
 def _get_video_encoder_configurations(ctx: OnvifContext, _request: ET.Element) -> str:
+    entries = "\n".join(
+        f"""      <trt:Configurations token="{profile.encoder_token}">
+{_video_encoder_config_body(ctx, profile)}
+      </trt:Configurations>"""
+        for profile in media_profiles(ctx)
+    )
     return f"""    <trt:GetVideoEncoderConfigurationsResponse>
-      <trt:Configurations token="vec_1">
-{_video_encoder_config_body(ctx)}
-      </trt:Configurations>
+{entries}
     </trt:GetVideoEncoderConfigurationsResponse>"""
 
 
-def _get_video_encoder_configuration(ctx: OnvifContext, _request: ET.Element) -> str:
+def _get_video_encoder_configuration(ctx: OnvifContext, request: ET.Element) -> str:
+    profile = _encoder_for_request(ctx, request)
     return f"""    <trt:GetVideoEncoderConfigurationResponse>
-      <trt:Configuration token="vec_1">
-{_video_encoder_config_body(ctx)}
+      <trt:Configuration token="{profile.encoder_token}">
+{_video_encoder_config_body(ctx, profile)}
       </trt:Configuration>
     </trt:GetVideoEncoderConfigurationResponse>"""
 
 
-def _get_video_encoder_configuration_options(ctx: OnvifContext, _request: ET.Element) -> str:
-    """What the encoder *could* do - here: exactly what it does do.
+def _get_video_encoder_configuration_options(ctx: OnvifContext, request: ET.Element) -> str:
+    """What the encoders *could* do - here: exactly what they do do.
 
     The stream is a fixed rendering pipeline, so every range is reported as a
-    single value. NVRs ask for this before they will show a stream; refusing
-    it is what stopped UniFi Protect.
+    single value, and the resolutions offered are the ones actually encoded.
+    NVRs ask for this before they will show a stream; refusing it is what
+    stopped UniFi Protect.
     """
-    s = ctx.settings
+    profiles = _encoders_for_options_request(ctx, request)
+    resolutions = "\n".join(
+        f"""          <tt:ResolutionsAvailable>
+            <tt:Width>{profile.width}</tt:Width><tt:Height>{profile.height}</tt:Height>
+          </tt:ResolutionsAvailable>"""
+        for profile in profiles
+    )
+    rates = [profile.framerate for profile in profiles]
+    govs = [profile.framerate * 2 for profile in profiles]
     return f"""    <trt:GetVideoEncoderConfigurationOptionsResponse>
       <trt:Options>
         <tt:QualityRange><tt:Min>1</tt:Min><tt:Max>10</tt:Max></tt:QualityRange>
         <tt:H264>
-          <tt:ResolutionsAvailable>
-            <tt:Width>{s.stream_width}</tt:Width><tt:Height>{s.stream_height}</tt:Height>
-          </tt:ResolutionsAvailable>
-          <tt:GovLengthRange><tt:Min>{s.framerate * 2}</tt:Min><tt:Max>{s.framerate * 2}</tt:Max></tt:GovLengthRange>
-          <tt:FrameRateRange><tt:Min>{s.framerate}</tt:Min><tt:Max>{s.framerate}</tt:Max></tt:FrameRateRange>
+{resolutions}
+          <tt:GovLengthRange><tt:Min>{min(govs)}</tt:Min><tt:Max>{max(govs)}</tt:Max></tt:GovLengthRange>
+          <tt:FrameRateRange><tt:Min>{min(rates)}</tt:Min><tt:Max>{max(rates)}</tt:Max></tt:FrameRateRange>
           <tt:EncodingIntervalRange><tt:Min>1</tt:Min><tt:Max>1</tt:Max></tt:EncodingIntervalRange>
           <tt:H264ProfilesSupported>{_h264_profile(ctx)}</tt:H264ProfilesSupported>
         </tt:H264>
@@ -827,24 +944,30 @@ def _get_video_source_configuration_options(ctx: OnvifContext, _request: ET.Elem
     </trt:GetVideoSourceConfigurationOptionsResponse>"""
 
 
-def _get_profile(ctx: OnvifContext, _request: ET.Element) -> str:
+def _get_profile(ctx: OnvifContext, request: ET.Element) -> str:
+    profile = _profile_for_request(ctx, request)
     return f"""    <trt:GetProfileResponse>
-      <trt:Profile token="profile_1" fixed="true">
-{_profile_body(ctx)}
+      <trt:Profile token="{profile.token}" fixed="true">
+{_profile_body(ctx, profile)}
       </trt:Profile>
     </trt:GetProfileResponse>"""
 
 
 def _get_profiles(ctx: OnvifContext, _request: ET.Element) -> str:
+    entries = "\n".join(
+        f"""      <trt:Profiles token="{profile.token}" fixed="true">
+{_profile_body(ctx, profile)}
+      </trt:Profiles>"""
+        for profile in media_profiles(ctx)
+    )
     return f"""    <trt:GetProfilesResponse>
-      <trt:Profiles token="profile_1" fixed="true">
-{_profile_body(ctx)}
-      </trt:Profiles>
+{entries}
     </trt:GetProfilesResponse>"""
 
 
-def _get_stream_uri(ctx: OnvifContext, _request: ET.Element) -> str:
-    uri = f"rtsp://{ctx.local_ip}:{ctx.settings.rtsp_port}/stream"
+def _get_stream_uri(ctx: OnvifContext, request: ET.Element) -> str:
+    profile = _profile_for_request(ctx, request)
+    uri = f"rtsp://{ctx.local_ip}:{ctx.settings.rtsp_port}/{profile.path}"
     return f"""    <trt:GetStreamUriResponse>
       <trt:MediaUri>
         <tt:Uri>{uri}</tt:Uri>
@@ -855,7 +978,11 @@ def _get_stream_uri(ctx: OnvifContext, _request: ET.Element) -> str:
     </trt:GetStreamUriResponse>"""
 
 
-def _get_snapshot_uri(ctx: OnvifContext, _request: ET.Element) -> str:
+def _get_snapshot_uri(ctx: OnvifContext, request: ET.Element) -> str:
+    # Both profiles show the same rendering, so there is one snapshot; the
+    # profile token is still validated so an unknown one faults here as it
+    # does everywhere else.
+    _profile_for_request(ctx, request)
     # The token rides along so that a client which just GETs this URI without
     # credentials still gets a picture; see get_or_create_snapshot_token.
     uri = f"http://{ctx.local_ip}:{ctx.settings.onvif_port}/snapshot.jpg"

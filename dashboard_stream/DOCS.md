@@ -13,11 +13,13 @@ camera.
 
 ## What you get
 
-- An RTSP stream (`rtsp://<host>:8554/stream`) protected by username/password.
+- An RTSP stream (`rtsp://<host>:8554/stream`) protected by username/password,
+  plus a smaller substream (`rtsp://<host>:8554/substream`, 640 px wide at up
+  to 10 fps) next to it, the way a real camera offers main and sub streams.
 - An ONVIF device + media service (`http://<host>:8080/onvif/...`) that
-  reports one fixed video profile, gated by the same credentials via
-  WS-Security (digest or plain), plus a WS-Discovery responder so
-  ONVIF-aware NVRs can find it automatically.
+  reports those two video profiles (`profile_1` / `profile_2`), gated by the
+  same credentials via WS-Security (digest or plain), plus a WS-Discovery
+  responder so ONVIF-aware NVRs can find it automatically.
 - A JPEG snapshot endpoint (`http://<host>:8080/snapshot.jpg`, HTTP Basic
   auth) for NVR thumbnails.
 - A web panel (open the app and click **Open Web UI** / the sidebar panel)
@@ -91,6 +93,7 @@ camera.
 | `dashboard_custom_url` | Advanced: render a full custom URL instead. |
 | `resolution` | Capture/output resolution. |
 | `framerate` | Output frame rate. |
+| `substream` | Publish a second, smaller stream (`/substream`) beside the main one and advertise it as a second ONVIF profile. On by default: every camera this app has been compared against - including ones UniFi Protect accepts - offers a main stream and a substream, and an NVR picks between them per view. Its geometry follows `resolution` (640 px wide, same aspect ratio) at up to 10 fps. Turn it off to save the second encode. |
 | `h264_profile` | H.264 profile the stream is encoded with, and which ONVIF reports. `baseline` (default) is the more widely decodable of the two; `main` compresses a little better. Worth trying either way if an NVR reads the stream but shows no picture - cameras known to work with UniFi Protect exist with both profiles, so neither is a requirement. |
 | `audio_track` | `silent` (default) publishes a silent AAC track alongside the video, because a video-only stream is unusual for a camera and some NVRs refuse to play one - UniFi Protect reports "cannot load live feed". `none` streams video only. The ONVIF profile describes whichever is configured. |
 | `color_scheme` | `dark` renders the dashboard in dark mode, `light` forces light, `auto` leaves it to the browser (light). Works through the browser's `prefers-color-scheme`, so the Home Assistant user whose token this app uses must have its theme set to **Auto** - a theme pinned in that user's profile wins. |
@@ -242,6 +245,12 @@ Python app (aiohttp, one process):
      Be careful with the credentials: a real camera locks the account after
      a few failed logins, which is why the tool stops asking a device
      anything else after its first authentication failure.
+  4. Since 1.8.0 the camera offers a substream as a second ONVIF profile,
+     which is the one structural difference the two devices this NVR accepts
+     shared against this app. If your NVR still shows nothing, check the log
+     for which profile it asked about - with `log_level: debug` every ONVIF
+     call is logged by name - and note that the URI handed back is `/stream`
+     for `profile_1` and `/substream` for `profile_2`.
   Since 1.6.0 the device also reports the transports it supports (`RTP_TCP`,
   `RTP_RTSP_TCP`) and offers the ONVIF event service NVRs subscribe to while
   setting a camera up; both were missing before, and an NVR that cannot see

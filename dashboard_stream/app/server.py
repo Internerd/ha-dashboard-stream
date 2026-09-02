@@ -424,6 +424,9 @@ async def handle_status(request: web.Request) -> web.Response:
             "local_ip": ctx.local_ip,
             "onvif_device_name": settings.onvif_device_name,
             "rtsp_url": f"rtsp://{ctx.local_ip}:{settings.rtsp_port}/stream",
+            "substream_url": (
+                f"rtsp://{ctx.local_ip}:{settings.rtsp_port}/substream" if settings.substream else ""
+            ),
             "onvif_device_service": f"http://{ctx.local_ip}:{settings.onvif_port}/onvif/device_service",
             "snapshot_url": f"http://{ctx.local_ip}:{settings.onvif_port}/snapshot.jpg",
             "stream_username": settings.stream_username,
@@ -583,6 +586,15 @@ async def main() -> None:
         settings.ingress_port,
         f"rtsp://{local_ip}:{settings.rtsp_port}/stream",
     )
+    if settings.substream:
+        logger.info(
+            "Second media profile (profile_2) on rtsp://%s:%s/substream (%sx%s@%s).",
+            local_ip,
+            settings.rtsp_port,
+            settings.sub_width,
+            settings.sub_height,
+            settings.sub_framerate,
+        )
 
     tasks = [
         asyncio.create_task(supervisor.run()),

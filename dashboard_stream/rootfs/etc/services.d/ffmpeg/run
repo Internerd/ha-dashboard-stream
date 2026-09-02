@@ -29,22 +29,52 @@ bashio::log.info "Capturing ${DISPLAY} -> rtsp://127.0.0.1:${RTSP_PORT}/stream (
 # frames to estimate rate". The rate is passed explicitly below anyway.
 # A dashboard has no sound, but a video-only stream is unusual for a camera and
 # some NVRs will not play one at all - hence a silent AAC track by default,
-# which the ONVIF profile advertises alongside the video.
+# which the ONVIF profiles advertise alongside the video.
 AUDIO_INPUT=()
-AUDIO_ARGS=()
+AUDIO_MAP=()
+AUDIO_ENC=()
 if [ "${AUDIO_TRACK:-silent}" = "silent" ]; then
     AUDIO_INPUT=(-f lavfi -i "anullsrc=channel_layout=mono:sample_rate=16000")
-    AUDIO_ARGS=(-map 0:v:0 -map 1:a:0 -c:a aac -b:a 16k -ar 16000 -ac 1)
+    AUDIO_MAP=(-map 1:a:0)
+    AUDIO_ENC=(-c:a aac -b:a 16k -ar 16000 -ac 1)
 fi
 
+# Second, smaller output on /substream, published from the same capture.
+# Cameras that UniFi Protect accepts all offer a main stream plus a substream
+# and choose between them per view; the ONVIF service advertises this one as a
+# second media profile. Both outputs come from one ffmpeg process, so if the
+# capture dies the whole camera goes down at once (and s6 restarts it) rather
+# than leaving one profile silently dead.
+SUB_OUTPUT=()
+if [ "${SUBSTREAM:-true}" = "true" ]; then
+    bashio::log.info "Also publishing rtsp://127.0.0.1:${RTSP_PORT}/substream (${SUB_WIDTH}x${SUB_HEIGHT}@${SUB_FRAMERATE})"
+    SUB_OUTPUT=(
+        -map 0:v:0 "${AUDIO_MAP[@]}"
+        -filter:v "scale=${SUB_WIDTH}:${SUB_HEIGHT},fps=${SUB_FRAMERATE}"
+        -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p
+        -profile:v "${H264_PROFILE:-baseline}"
+        -g "$((SUB_FRAMERATE * 2))" -b:v 500k -maxrate 600k -bufsize 800k
+        "${AUDIO_ENC[@]}"
+        -f rtsp -rtsp_transport tcp -pkt_size 1400
+        "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/substream"
+    )
+fi
+
+# -thread_queue_size: the default of 8 frames is not enough for two encoders
+# reading one capture - the grab thread blocks ("Thread message queue
+# blocking"), timestamps then jump and ffmpeg fills the gaps with duplicated
+# frames, which reaches the NVR as bursts several times faster than the
+# configured rate. 512 frames of slack keeps both outputs at real time.
 exec ffmpeg -hide_banner -loglevel warning -nostdin \
     -probesize 64M \
-    -f x11grab -draw_mouse 0 \
+    -thread_queue_size 512 -f x11grab -draw_mouse 0 \
     -video_size "${STREAM_WIDTH}x${STREAM_HEIGHT}" -framerate "${STREAM_FRAMERATE}" -i "${DISPLAY}" \
     "${AUDIO_INPUT[@]}" \
+    -map 0:v:0 "${AUDIO_MAP[@]}" \
     -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
     -profile:v "${H264_PROFILE:-baseline}" \
     -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
-    "${AUDIO_ARGS[@]}" \
+    "${AUDIO_ENC[@]}" \
     -f rtsp -rtsp_transport tcp -pkt_size 1400 \
-    "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/stream"
+    "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/stream" \
+    "${SUB_OUTPUT[@]}"

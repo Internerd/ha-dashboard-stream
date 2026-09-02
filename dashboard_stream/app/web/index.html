@@ -66,6 +66,7 @@
       <dt>Browser</dt><dd id="s-browser">-</dd>
       <dt>ONVIF</dt><dd id="s-onvif">-</dd>
       <dt>RTSP URL</dt><dd id="s-rtsp">-</dd>
+      <dt id="s-substream-dt" hidden>Substream URL</dt><dd id="s-substream" hidden>-</dd>
       <dt>ONVIF device service</dt><dd id="s-device">-</dd>
       <dt>Snapshot URL</dt><dd id="s-snapshot">-</dd>
       <dt>Username</dt><dd id="s-user">-</dd>
@@ -112,6 +113,11 @@
       ? '<span class="badge ok">enabled</span> as "' + s.onvif_device_name + '"'
       : '<span class="badge bad">disabled</span>';
     document.getElementById('s-rtsp').innerHTML = '<code>' + s.rtsp_url + '</code>';
+    const subDt = document.getElementById('s-substream-dt');
+    const subDd = document.getElementById('s-substream');
+    subDd.innerHTML = s.substream_url ? '<code>' + s.substream_url + '</code>' : '-';
+    subDt.hidden = !s.substream_url;
+    subDd.hidden = !s.substream_url;
     document.getElementById('s-device').innerHTML = '<code>' + s.onvif_device_service + '</code>';
     document.getElementById('s-snapshot').innerHTML = '<code>' + s.snapshot_url + '</code>';
     document.getElementById('s-user').textContent = s.stream_username;

@@ -4,6 +4,35 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-09-02
+
+### Added
+
+- A **substream**: a second, smaller RTSP stream (`/substream`, 640 px wide
+  at up to 10 fps) published alongside the main one, advertised over ONVIF
+  as a second media profile (`profile_2`). Both devices this repository has
+  compared itself against - a Happytime server and a Reolink RLC-811A, both
+  of which the same UniFi Protect console displays - expose a main stream
+  plus a substream, and that was the one structural difference left against
+  this app, which had exactly one profile. New option `substream` (on by
+  default) turns it off again to save the second encode.
+
+### Changed
+
+- The media service now honours the `ProfileToken` and `ConfigurationToken`
+  in a request instead of always answering for the single profile it had:
+  `GetProfile`, `GetStreamUri`, `GetSnapshotUri`,
+  `GetVideoEncoderConfiguration` and `GetVideoEncoderConfigurationOptions`
+  answer for the profile that was asked about, and fault with `ter:NoProfile`
+  / `ter:NoConfig` for a token this device does not have.
+  `MaximumNumberOfProfiles` reports the real number of profiles.
+- The capture passes `-thread_queue_size 512`. With two encoders reading one
+  X11 grab the default of 8 frames made the grab thread block, after which
+  ffmpeg filled the timestamp gaps with duplicated frames and the main
+  stream arrived at 120 fps instead of 15. Measured before and after: 151
+  frames in 10 s on the main stream and 101 on the substream, with no
+  warnings left in the log.
+
 ## [1.7.1] - 2026-09-01
 
 ### Changed

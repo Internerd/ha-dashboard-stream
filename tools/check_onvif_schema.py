@@ -125,7 +125,7 @@ def build_request(operation: str, namespace: str) -> bytes:
     ).encode()
 
 
-def make_context(audio_track: str) -> onvif.OnvifContext:
+def make_context(audio_track: str, substream: bool = True) -> onvif.OnvifContext:
     settings = Settings(
         ha_url="http://homeassistant.local:8123",
         ha_token="",
@@ -134,6 +134,10 @@ def make_context(audio_track: str) -> onvif.OnvifContext:
         stream_width=1280,
         stream_height=720,
         framerate=15,
+        substream=substream,
+        sub_width=640,
+        sub_height=360,
+        sub_framerate=10,
         audio_track=audio_track,
         h264_profile="baseline",
         color_scheme="auto",
@@ -174,24 +178,25 @@ def main() -> int:
     types = load_types(schema_path)
     findings: list[str] = []
     checked = 0
-    for audio_track in ("silent", "none"):
-        ctx = make_context(audio_track)
+    for audio_track, substream in (("silent", True), ("silent", False), ("none", True), ("none", False)):
+        mode = f"audio_track={audio_track}, substream={substream}"
+        ctx = make_context(audio_track, substream)
         for operation, namespace, tag, type_name in CHECKS:
             try:
                 response = onvif.handle_soap_request(build_request(operation, namespace), ctx, peer="schema-check")
             except onvif.OnvifError as err:
                 if audio_track == "none" and "audio" in err.reason.lower():
                     continue  # audio queries are expected to refuse when there is no audio
-                findings.append(f"{operation} (audio_track={audio_track}): {err.reason}")
+                findings.append(f"{operation} ({mode}): {err.reason}")
                 continue
             elements = [e for e in ET.fromstring(response).iter() if e.tag == tag]
             if not elements and not (audio_track == "none" and "Audio" in operation):
-                findings.append(f"{operation} (audio_track={audio_track}): no <{tag.split('}')[-1]}> in the response")
+                findings.append(f"{operation} ({mode}): no <{tag.split('}')[-1]}> in the response")
             for element in elements:
-                check(types, element, type_name, f"{operation} (audio_track={audio_track})", findings)
+                check(types, element, type_name, f"{operation} ({mode})", findings)
                 checked += 1
 
-    print(f"checked {checked} elements across {len(CHECKS)} operations in both audio modes")
+    print(f"checked {checked} elements across {len(CHECKS)} operations in every audio/substream mode")
     for finding in findings:
         print(f"  - {finding}")
     print(f"findings: {len(findings)}")

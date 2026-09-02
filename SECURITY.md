@@ -68,6 +68,11 @@ network isolation. Two things are done to limit the blast radius of this:
   password on a process command line (visible to anything else able to
   inspect processes in the container), and cannot be used to publish from
   outside the container's own loopback.
+- Both RTSP paths - `/stream` and, when `substream` is enabled,
+  `/substream` - carry the same rendering and are gated by the same
+  credentials, read-only. The loopback-only publish credential may publish
+  to both and read neither. Turning `substream` off removes the path from
+  the server entirely rather than leaving it unauthenticated.
 - The snapshot URL that ONVIF hands out carries a random 128-bit token
   (`/snapshot.jpg?token=...`, stored in `/data/snapshot_token`). NVRs
   routinely fetch that URL with a plain GET and never answer an HTTP 401,

@@ -32,6 +32,10 @@ class Settings:
     stream_width: int
     stream_height: int
     framerate: int
+    substream: bool
+    sub_width: int
+    sub_height: int
+    sub_framerate: int
     audio_track: str
     h264_profile: str
     color_scheme: str
@@ -68,6 +72,10 @@ def load_settings() -> Settings:
         stream_width=_int(env.get("STREAM_WIDTH"), 1920),
         stream_height=_int(env.get("STREAM_HEIGHT"), 1080),
         framerate=_int(env.get("STREAM_FRAMERATE"), 15),
+        substream=_bool(env.get("SUBSTREAM"), True),
+        sub_width=_int(env.get("SUB_WIDTH"), 640),
+        sub_height=_int(env.get("SUB_HEIGHT"), 360),
+        sub_framerate=_int(env.get("SUB_FRAMERATE"), 10),
         audio_track=env.get("AUDIO_TRACK", "silent").strip().lower(),
         h264_profile=env.get("H264_PROFILE", "baseline").strip().lower(),
         color_scheme=env.get("COLOR_SCHEME", "auto").strip().lower(),

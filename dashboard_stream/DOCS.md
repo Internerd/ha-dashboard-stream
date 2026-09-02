@@ -95,7 +95,7 @@ camera.
 | `framerate` | Output frame rate. |
 | `substream` | Publish a second, smaller stream (`/substream`) beside the main one and advertise it as a second ONVIF profile. On by default: every camera this app has been compared against - including ones UniFi Protect accepts - offers a main stream and a substream, and an NVR picks between them per view. Its geometry follows `resolution` (640 px wide, same aspect ratio) at up to 10 fps. Turn it off to save the second encode. |
 | `h264_profile` | H.264 profile the stream is encoded with, and which ONVIF reports. `baseline` (default) is the more widely decodable of the two; `main` compresses a little better. Worth trying either way if an NVR reads the stream but shows no picture - cameras known to work with UniFi Protect exist with both profiles, so neither is a requirement. |
-| `audio_track` | `silent` (default) publishes a silent AAC track alongside the video, because a video-only stream is unusual for a camera and some NVRs refuse to play one - UniFi Protect reports "cannot load live feed". `none` streams video only. The ONVIF profile describes whichever is configured. |
+| `audio_track` | `none` (default) streams video only, like the ONVIF server this app's NVR is known to accept. `silent` adds a silent G.711 track for NVRs that refuse a video-only camera. Until 1.9.0 that track was AAC and malformed - measured with `tools/compare_rtsp.py`, it arrived as one 704 ms burst every 704 ms where a camera sends 59 ms packets; G.711 packetises per 64 ms and matches. The ONVIF profiles describe whichever is configured. |
 | `color_scheme` | `dark` renders the dashboard in dark mode, `light` forces light, `auto` leaves it to the browser (light). Works through the browser's `prefers-color-scheme`, so the Home Assistant user whose token this app uses must have its theme set to **Auto** - a theme pinned in that user's profile wins. |
 | `render_wait` | Seconds to let the page finish rendering before capture starts. |
 | `reload_interval` | Seconds between automatic page reloads (0 disables). Mitigates browser memory growth on long-running kiosks. |
@@ -259,6 +259,11 @@ Python app (aiohttp, one process):
      are repeated in-band, the decoded SPS. That is how the two defects
      fixed in 1.8.1 were found; a camera you can point it at is worth more
      than any amount of reasoning about what the NVR wants.
+  What is measured and still differs from a camera, without being fixable
+  from this app: the embedded RTSP server sends its first RTCP sender report
+  after 10 s (a camera sends one within about a second), and its SDP carries
+  no session-level `a=control:*`, `a=range:`, `b=AS:` or per-track
+  `a=recvonly`. Both come from mediamtx and have no configuration knob.
   Since 1.6.0 the device also reports the transports it supports (`RTP_TCP`,
   `RTP_RTSP_TCP`) and offers the ONVIF event service NVRs subscribe to while
   setting a camera up; both were missing before, and an NVR that cannot see

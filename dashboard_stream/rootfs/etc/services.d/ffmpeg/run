@@ -27,16 +27,20 @@ bashio::log.info "Capturing ${DISPLAY} -> rtsp://127.0.0.1:${RTSP_PORT}/stream (
 # -probesize: one raw 1920x1080 frame is ~8 MB, well over ffmpeg's 5 MB
 # default, so the input probe never saw a full frame and warned "not enough
 # frames to estimate rate". The rate is passed explicitly below anyway.
-# A dashboard has no sound, but a video-only stream is unusual for a camera and
-# some NVRs will not play one at all - hence a silent AAC track by default,
-# which the ONVIF profiles advertise alongside the video.
+# A dashboard has no sound. audio_track defaults to "none" because the one
+# ONVIF server this app's NVR is known to accept streams video only, and
+# because the silent track this app used to publish was malformed: measured
+# with tools/compare_rtsp.py, AAC silence left here in RTP packets carrying
+# eleven access units each - one 704 ms burst every 704 ms, against the 59 ms
+# cadence of a real camera. G.711 packetises per 64 ms and matches a camera,
+# so that is what "silent" now publishes.
 AUDIO_INPUT=()
 AUDIO_MAP=()
 AUDIO_ENC=()
-if [ "${AUDIO_TRACK:-silent}" = "silent" ]; then
-    AUDIO_INPUT=(-f lavfi -i "anullsrc=channel_layout=mono:sample_rate=16000")
+if [ "${AUDIO_TRACK:-none}" = "silent" ]; then
+    AUDIO_INPUT=(-f lavfi -i "anullsrc=channel_layout=mono:sample_rate=8000")
     AUDIO_MAP=(-map 1:a:0)
-    AUDIO_ENC=(-c:a aac -b:a 16k -ar 16000 -ac 1)
+    AUDIO_ENC=(-c:a pcm_mulaw -ar 8000 -ac 1)
 fi
 
 # Second, smaller output on /substream, published from the same capture.

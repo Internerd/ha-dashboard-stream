@@ -76,7 +76,7 @@ def load_settings() -> Settings:
         sub_width=_int(env.get("SUB_WIDTH"), 640),
         sub_height=_int(env.get("SUB_HEIGHT"), 360),
         sub_framerate=_int(env.get("SUB_FRAMERATE"), 10),
-        audio_track=env.get("AUDIO_TRACK", "silent").strip().lower(),
+        audio_track=env.get("AUDIO_TRACK", "none").strip().lower(),
         h264_profile=env.get("H264_PROFILE", "baseline").strip().lower(),
         color_scheme=env.get("COLOR_SCHEME", "auto").strip().lower(),
         render_wait=_int(env.get("RENDER_WAIT"), 8),

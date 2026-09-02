@@ -45,14 +45,27 @@ fi
 # second media profile. Both outputs come from one ffmpeg process, so if the
 # capture dies the whole camera goes down at once (and s6 restarts it) rather
 # than leaving one profile silently dead.
+# -x264-params: two settings that make this stream look like a camera's
+# rather than a screen recorder's, both measured with tools/compare_rtsp.py
+# against a camera the NVR displays.
+#   sliced-threads=0 - "-tune zerolatency" turns on sliced threads, which cuts
+#     every frame into one slice per CPU core (four on a four-core host). A
+#     camera sends one slice per frame, and a decoder that only handles that
+#     shows nothing while happily holding the RTSP session open.
+#   repeat-headers=1 - without it x264 puts SPS/PPS in the container header
+#     only, so they reach a client in the SDP's sprop-parameter-sets and never
+#     in the stream. A player reads them there; an NVR that expects a camera's
+#     parameter sets ahead of every keyframe never gets a decodable frame.
+X264_PARAMS="sliced-threads=0:repeat-headers=1"
+
 SUB_OUTPUT=()
 if [ "${SUBSTREAM:-true}" = "true" ]; then
     bashio::log.info "Also publishing rtsp://127.0.0.1:${RTSP_PORT}/substream (${SUB_WIDTH}x${SUB_HEIGHT}@${SUB_FRAMERATE})"
     SUB_OUTPUT=(
         -map 0:v:0 "${AUDIO_MAP[@]}"
         -filter:v "scale=${SUB_WIDTH}:${SUB_HEIGHT},fps=${SUB_FRAMERATE}"
-        -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p
-        -profile:v "${H264_PROFILE:-baseline}"
+        -c:v libx264 -preset veryfast -tune zerolatency -x264-params "${X264_PARAMS}"
+        -pix_fmt yuv420p -profile:v "${H264_PROFILE:-baseline}"
         -g "$((SUB_FRAMERATE * 2))" -b:v 500k -maxrate 600k -bufsize 800k
         "${AUDIO_ENC[@]}"
         -f rtsp -rtsp_transport tcp -pkt_size 1400
@@ -71,8 +84,8 @@ exec ffmpeg -hide_banner -loglevel warning -nostdin \
     -video_size "${STREAM_WIDTH}x${STREAM_HEIGHT}" -framerate "${STREAM_FRAMERATE}" -i "${DISPLAY}" \
     "${AUDIO_INPUT[@]}" \
     -map 0:v:0 "${AUDIO_MAP[@]}" \
-    -c:v libx264 -preset veryfast -tune zerolatency -pix_fmt yuv420p \
-    -profile:v "${H264_PROFILE:-baseline}" \
+    -c:v libx264 -preset veryfast -tune zerolatency -x264-params "${X264_PARAMS}" \
+    -pix_fmt yuv420p -profile:v "${H264_PROFILE:-baseline}" \
     -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
     "${AUDIO_ENC[@]}" \
     -f rtsp -rtsp_transport tcp -pkt_size 1400 \

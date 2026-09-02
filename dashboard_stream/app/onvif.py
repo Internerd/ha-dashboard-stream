@@ -748,7 +748,7 @@ def _video_encoder_config_body(ctx: OnvifContext, profile: MediaProfile) -> str:
         <tt:EncodingInterval>1</tt:EncodingInterval>
         <tt:BitrateLimit>{profile.bitrate}</tt:BitrateLimit>
       </tt:RateControl>
-      <tt:H264><tt:GovLength>{profile.framerate * 2}</tt:GovLength><tt:H264Profile>{_h264_profile(ctx)}</tt:H264Profile></tt:H264>
+      <tt:H264><tt:GovLength>{profile.framerate}</tt:GovLength><tt:H264Profile>{_h264_profile(ctx)}</tt:H264Profile></tt:H264>
 {_MULTICAST_OFF}
       <tt:SessionTimeout>PT60S</tt:SessionTimeout>"""
 
@@ -898,7 +898,7 @@ def _get_video_encoder_configuration_options(ctx: OnvifContext, request: ET.Elem
         for profile in profiles
     )
     rates = [profile.framerate for profile in profiles]
-    govs = [profile.framerate * 2 for profile in profiles]
+    govs = [profile.framerate for profile in profiles]
     return f"""    <trt:GetVideoEncoderConfigurationOptionsResponse>
       <trt:Options>
         <tt:QualityRange><tt:Min>1</tt:Min><tt:Max>10</tt:Max></tt:QualityRange>

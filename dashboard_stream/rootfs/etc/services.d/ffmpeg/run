@@ -13,6 +13,10 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
+# -g: one keyframe per second, which is what the camera this NVR displays
+# sends (measured 1.01 s against this app's former 2.00 s). It also halves
+# how long a client waits for its first decodable picture, since a decoder
+# can only start on a keyframe.
 # -pkt_size 1400: ffmpeg's default RTP payload is larger than what the RTSP
 # server accepts ("RTP packets are too big (1460 > 1440), remuxing them into
 # smaller ones"), so it repacketises every frame. 1400 keeps the packets under
@@ -70,7 +74,7 @@ if [ "${SUBSTREAM:-true}" = "true" ]; then
         -filter:v "scale=${SUB_WIDTH}:${SUB_HEIGHT},fps=${SUB_FRAMERATE}"
         -c:v libx264 -preset veryfast -tune zerolatency -x264-params "${X264_PARAMS}"
         -pix_fmt yuv420p -profile:v "${H264_PROFILE:-baseline}"
-        -g "$((SUB_FRAMERATE * 2))" -b:v 500k -maxrate 600k -bufsize 800k
+        -g "${SUB_FRAMERATE}" -b:v 500k -maxrate 600k -bufsize 800k
         "${AUDIO_ENC[@]}"
         -f rtsp -rtsp_transport tcp -pkt_size 1400
         "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/substream"
@@ -90,7 +94,7 @@ exec ffmpeg -hide_banner -loglevel warning -nostdin \
     -map 0:v:0 "${AUDIO_MAP[@]}" \
     -c:v libx264 -preset veryfast -tune zerolatency -x264-params "${X264_PARAMS}" \
     -pix_fmt yuv420p -profile:v "${H264_PROFILE:-baseline}" \
-    -g "$((STREAM_FRAMERATE * 2))" -b:v 2500k -maxrate 3000k -bufsize 4000k \
+    -g "${STREAM_FRAMERATE}" -b:v 2500k -maxrate 3000k -bufsize 4000k \
     "${AUDIO_ENC[@]}" \
     -f rtsp -rtsp_transport tcp -pkt_size 1400 \
     "rtsp://publisher:internal-publish-only@127.0.0.1:${RTSP_PORT}/stream" \

@@ -148,6 +148,13 @@ def call(base: str, service: str, operation: str, namespace: str, user: str, pas
         return f"unreachable ({err})", ""
 
 
+AUTH_FAILURE = re.compile(r"HTTP 40[013]|not authorized|incorrect|locked", re.I)
+
+
+def looks_like_auth_failure(status: str) -> bool:
+    return bool(AUTH_FAILURE.search(status))
+
+
 def body_of(xml: str) -> ET.Element | None:
     try:
         root = ET.fromstring(xml)
@@ -266,20 +273,41 @@ def main() -> int:
     print("\nOnly meaningful differences are listed; addresses, timestamps, serials and")
     print("tokens are normalised away because they are supposed to differ.")
 
+    # A real camera will lock an account out after a handful of failed logins,
+    # so the first authentication failure stops the questions for that device
+    # rather than hammering it with sixteen more.
+    stopped: dict[str, str] = {}
     for operation, namespace, service in OPERATIONS:
-        report_operation(
-            operation,
-            service,
-            call(args.a, service, operation, namespace, a_user, a_password),
-            call(args.b, service, operation, namespace, b_user, b_password),
+        results = {}
+        for label, base, user, password in (
+            ("A", args.a, a_user, a_password),
+            ("B", args.b, b_user, b_password),
+        ):
+            if label in stopped:
+                results[label] = (f"skipped after {stopped[label]}", "")
+                continue
+            status, xml = call(base, service, operation, namespace, user, password)
+            if looks_like_auth_failure(status):
+                stopped[label] = status
+            results[label] = (status, xml)
+        report_operation(operation, service, results["A"], results["B"])
+
+    for label, status in stopped.items():
+        print(
+            f"\n{label} stopped after the first authentication failure ({status}). "
+            f"Check the credentials for {label}, and give a locked-out camera a few "
+            f"minutes before trying again."
         )
 
-    if args.a_rtsp and args.b_rtsp:
+    if args.a_rtsp and args.b_rtsp and not stopped:
         print("\n\n=== RTSP ===")
         status_a, sdp_a = rtsp_describe(args.a_rtsp, a_user, a_password)
         status_b, sdp_b = rtsp_describe(args.b_rtsp, b_user, b_password)
         print(f"A: {status_a}")
         print(f"B: {status_b}")
+        for label, status in (("A", status_a), ("B", status_b)):
+            if "401" in status:
+                print(f"\n{label}: RTSP refused the credentials, so its SDP is missing above.")
         print("\nSDP of A:")
         for line in sdp_a:
             print(f"  {line}")

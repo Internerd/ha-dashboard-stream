@@ -4,6 +4,23 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-09-01
+
+### Changed
+
+- Corrected what 1.7.0 claimed. It concluded from one working device
+  (Constrained Baseline, `42C028`) that the H.264 profile was what UniFi
+  Protect needed. A second device the same console accepts - a Reolink
+  camera - streams `4D0033`, which is Main at level 5.1, exactly the profile
+  this app used before 1.7.0. Two working references disagree, so the
+  profile is not the differentiator. `h264_profile` stays, and stays at
+  `baseline` because that is the more widely decodable of the two, but it is
+  no longer presented as the fix for a missing live feed.
+- Both working devices also carry SDP attributes the embedded RTSP server
+  does not emit - session-level `a=control:*`, `a=range:` and `b=AS:`, and
+  `a=recvonly` per track. That is now the open question, and it is about the
+  RTSP server rather than the encoder or the ONVIF service.
+
 ## [1.7.0] - 2026-09-01
 
 ### Added

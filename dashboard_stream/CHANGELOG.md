@@ -4,6 +4,21 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.4] - 2026-11-01
+
+### Fixed
+
+- **Blank stream / Chromium error page with the default `ha_url`.** The
+  default `http://homeassistant.local:8123` is an mDNS name, and the app's
+  Alpine resolver does not do mDNS, so on networks whose DNS server does not
+  answer for it the kiosk showed `chrome-error://chromewebdata/`. At startup
+  the app now checks that the host in `ha_url` resolves. If it does not, it
+  falls back to `127.0.0.1` with the same scheme and port: Home Assistant
+  Core and this app share the host network. A warning in the log says so.
+  The check needs only DNS, not a running Core, so it also works at boot.
+- The log now names a Chromium error page as such and points at `ha_url`.
+  Before, it only reported the error page's text as a normal page.
+
 ## [1.9.3] - 2026-11-01
 
 ### Fixed

@@ -161,7 +161,15 @@ class BrowserSupervisor:
             page.get("elements"),
             page.get("roots"),
         )
-        if not page.get("characters") and not page.get("elements"):
+        if str(page.get("url", "")).startswith("chrome-error://"):
+            logger.warning(
+                "The browser could not load %s (Chromium error page, title %r). The host in "
+                "ha_url is unreachable or does not resolve from this app - set ha_url to an IP "
+                "address, e.g. http://127.0.0.1:8123 or http://<host-ip>:8123.",
+                self.current_url,
+                page.get("title"),
+            )
+        elif not page.get("characters") and not page.get("elements"):
             logger.warning(
                 "That page has no visible text, so the stream is a blank picture. Check that "
                 "ha_url is reachable from this app, that the dashboard path exists, and that "

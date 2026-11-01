@@ -93,6 +93,45 @@ if [[ "${SUB_FRAMERATE}" -gt 10 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Make sure ha_url's host resolves inside this container.
+# The default (homeassistant.local) is an mDNS name, and Alpine's resolver
+# does not do mDNS - it only resolves when the network's DNS server answers
+# for it. If it does not, the kiosk shows Chromium's error page. Home
+# Assistant Core and this app both run on the host network, so loopback
+# reaches Core on the same port; fall back to it, keeping scheme and port.
+# Only name resolution is checked, so this works before Core is up.
+# ---------------------------------------------------------------------------
+resolves() {
+    python3 -I -c 'import socket,sys; socket.getaddrinfo(sys.argv[1], None)' "$1" >/dev/null 2>&1
+}
+if [[ "${HA_URL}" =~ ^(https?)://(\[[^]]+\]|[^/:]+)(:[0-9]+)?(/.*)?$ ]]; then
+    HA_SCHEME="${BASH_REMATCH[1]}"
+    HA_HOST="${BASH_REMATCH[2]}"
+    HA_PORT="${BASH_REMATCH[3]}"
+    HA_RESOLVED=false
+    for _ in 1 2 3; do
+        if resolves "${HA_HOST//[\[\]]/}"; then
+            HA_RESOLVED=true
+            break
+        fi
+        sleep 2
+    done
+    if [[ "${HA_RESOLVED}" != "true" ]]; then
+        FALLBACK_URL="${HA_SCHEME}://127.0.0.1${HA_PORT:-:8123}"
+        bashio::log.warning "'${HA_HOST}' from ha_url does not resolve inside this app;" \
+            "using ${FALLBACK_URL} instead. Set ha_url to an IP address or a name" \
+            "your DNS server answers for to silence this."
+        if [[ "${HA_SCHEME}" == "https" ]]; then
+            bashio::log.warning "ha_url uses https: the certificate will not match 127.0.0.1." \
+                "If the dashboard shows a certificate error, set ha_url explicitly."
+        fi
+        HA_URL="${FALLBACK_URL}"
+    fi
+else
+    bashio::log.warning "ha_url '${HA_URL}' is not an http(s) URL; using it as given."
+fi
+
+# ---------------------------------------------------------------------------
 # Resolve the dashboard URL to render.
 # Priority: dashboard_custom_url > dashboard picked via the web panel
 # (/data/dashboard_selection.json) > dashboard_path option.

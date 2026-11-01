@@ -87,7 +87,7 @@ camera.
 
 | Option | Description |
 | --- | --- |
-| `ha_url` | Base URL the internal browser uses to reach Home Assistant. |
+| `ha_url` | Base URL the internal browser uses to reach Home Assistant. If its host name does not resolve inside the app (common for the default `homeassistant.local`, an mDNS name), the app falls back to `127.0.0.1` with the same scheme and port and logs a warning. |
 | `ha_long_lived_token` | Optional token used to auto-sign the browser in (see above). |
 | `dashboard_path` | Fallback dashboard path, used until you pick one in the Web UI. |
 | `dashboard_custom_url` | Advanced: render a full custom URL instead. |

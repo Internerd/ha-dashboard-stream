@@ -47,7 +47,13 @@ RUN \
         arm64) MEDIAMTX_ARCH="arm64" ;; \
         *) echo "Unsupported TARGETARCH: ${TARGETARCH}" && exit 1 ;; \
     esac; \
-    curl -sSLf -o /tmp/mediamtx.tar.gz \
+    # Retry every failure, not only HTTP 5xx: on a freshly booted host the
+    # build container's DNS can time out for a few seconds (curl exit 6),
+    # which plain --retry does not treat as transient.
+    curl -sSLf \
+        --retry 8 --retry-delay 5 --retry-max-time 180 --retry-all-errors \
+        --connect-timeout 20 \
+        -o /tmp/mediamtx.tar.gz \
         "https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/mediamtx_${MEDIAMTX_VERSION}_linux_${MEDIAMTX_ARCH}.tar.gz"; \
     mkdir -p /tmp/mediamtx; \
     tar -xzf /tmp/mediamtx.tar.gz -C /tmp/mediamtx; \

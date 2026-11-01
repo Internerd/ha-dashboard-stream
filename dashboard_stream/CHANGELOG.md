@@ -4,6 +4,15 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.2] - 2026-11-01
+
+### Fixed
+
+- Installation no longer fails outright when DNS is briefly unavailable
+  while Supervisor builds the image (`curl: (6) Could not resolve host:
+  github.com`). The mediamtx download now retries every kind of failure for
+  up to three minutes instead of giving up on the first one.
+
 ## [1.9.1] - 2026-09-02
 
 ### Changed

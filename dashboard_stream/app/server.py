@@ -407,8 +407,11 @@ async def handle_select(request: web.Request) -> web.Response:
     supervisor: BrowserSupervisor = request.app["browser_supervisor"]
     try:
         await supervisor.set_dashboard(url)
-    except browser.BrowserError:
-        logger.warning("Could not switch the live browser to %s, it will apply on next restart", url, exc_info=True)
+    except browser.BrowserError as err:
+        # The selection is saved and current_url is updated, so the browser
+        # supervisor navigates there as soon as Chromium is (back) up.
+        logger.warning("Browser not reachable yet (%s); %s will be shown once it is up", err, url)
+        return web.json_response({"ok": True, "url": url, "pending": True})
     return web.json_response({"ok": True, "url": url})
 
 

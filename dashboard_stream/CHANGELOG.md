@@ -4,6 +4,21 @@ All notable changes to the **Dashboard Stream Cam** app are documented in
 this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.3] - 2026-11-01
+
+### Fixed
+
+- Choosing a dashboard while the browser was still starting failed with
+  "Request failed: SyntaxError: The string did not match the expected
+  pattern". The browser's "connection refused" escaped as an unhandled error,
+  so the panel received a plain-text HTTP 500 instead of JSON. CDP connection
+  errors and timeouts are now reported as browser errors everywhere, the
+  selection is saved and applied as soon as the browser is up, and the panel
+  says so. The panel also shows the HTTP status if a reply is not JSON.
+- The startup log now says whether Home Assistant was reachable at `ha_url`,
+  and suggests an address that resolves when it was not, instead of starting
+  the browser silently after waiting about seven minutes.
+
 ## [1.9.2] - 2026-11-01
 
 ### Fixed

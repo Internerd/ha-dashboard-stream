@@ -57,7 +57,16 @@ async def cdp_call(
                     break
         raise BrowserError("CDP connection closed without a response")
 
-    return await asyncio.wait_for(_do_call(), timeout=timeout)
+    # Callers handle BrowserError only. A browser that is not listening yet,
+    # or that dies mid-call, surfaces from aiohttp as ClientError/OSError and
+    # from wait_for as TimeoutError - fold those in so they cannot escape as
+    # unhandled exceptions (e.g. a plain-text HTTP 500 from the ingress panel).
+    try:
+        return await asyncio.wait_for(_do_call(), timeout=timeout)
+    except BrowserError:
+        raise
+    except (aiohttp.ClientError, OSError, asyncio.TimeoutError, KeyError, ValueError) as err:
+        raise BrowserError(f"{method} failed: {err or type(err).__name__}") from err
 
 
 async def wait_for_cdp_ready(

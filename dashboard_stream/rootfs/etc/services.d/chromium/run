@@ -21,12 +21,20 @@ for _ in $(seq 1 30); do
 done
 
 bashio::log.info "Waiting for Home Assistant at ${HA_URL} ..."
+HA_REACHABLE=false
 for _ in $(seq 1 90); do
     if curl -sf -o /dev/null --max-time 3 "${HA_URL%/}/manifest.json"; then
+        HA_REACHABLE=true
         break
     fi
     sleep 2
 done
+if [ "${HA_REACHABLE}" = "true" ]; then
+    bashio::log.info "Home Assistant is reachable at ${HA_URL}"
+else
+    bashio::log.warning "Home Assistant was not reachable at ${HA_URL}; starting the browser anyway."
+    bashio::log.warning "If this persists, set ha_url to an address this app can resolve, e.g. http://127.0.0.1:8123 or http://<host-ip>:8123 (.local names need working mDNS/DNS)."
+fi
 
 CHROMIUM_BIN="$(command -v chromium || command -v chromium-browser || echo /usr/bin/chromium)"
 bashio::log.info "Starting Chromium kiosk (binary: ${CHROMIUM_BIN}) -> ${DASHBOARD_URL}"

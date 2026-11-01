@@ -132,8 +132,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: sel.value }),
       });
-      const data = await res.json();
-      if (data.ok) {
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        throw new Error('HTTP ' + res.status + (text ? ': ' + text.slice(0, 200) : ''));
+      }
+      if (data.ok && data.pending) {
+        setMsg('Saved. The browser is still starting; it will show ' + data.url + ' as soon as it is up.', false);
+        loadStatus();
+      } else if (data.ok) {
         setMsg('Applied. The stream now shows: ' + data.url, false);
         loadStatus();
       } else {
